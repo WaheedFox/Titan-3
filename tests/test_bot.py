@@ -705,13 +705,13 @@ class TestOnOffsetOrdering:
 
 
 # ---------------------------------------------------------------------------
-# B2-007 — run_async lifecycle boundary
+# run_async lifecycle boundary
 # ---------------------------------------------------------------------------
 
-class TestB2007RunAsyncLifecycle:
+class TestRunAsyncLifecycle:
 
     @pytest.mark.asyncio
-    async def test_b2007_run_async_cancellation_remains_visible_after_cleanup(self):
+    async def test_run_async_cancellation_remains_visible_after_cleanup(self):
         bot = Titan("fake-token")
         handler_started = asyncio.Event()
         handler_cancelled = asyncio.Event()
@@ -753,7 +753,7 @@ class TestB2007RunAsyncLifecycle:
         bot._api.close.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_b2007_api_close_happens_after_lifecycle_cleanup(self):
+    async def test_api_close_happens_after_lifecycle_cleanup(self):
         bot = Titan("fake-token")
         handler_started = asyncio.Event()
         grace_started = asyncio.Event()

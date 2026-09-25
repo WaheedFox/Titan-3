@@ -4,6 +4,8 @@ A minimal async Python framework for building Telegram bots.
 
 Titan gives you clean events, readable code, and a stable API that does not change under your feet.
 
+> **Public baseline:** Titan B1 (`1.0.0b1`) is the first public baseline. Earlier alpha versions (`1.0.0a1` and `1.0.0a2`) are historical pre-releases, not earlier baselines.
+
 [![CI](https://github.com/WaheedFox/Titan/actions/workflows/ci.yml/badge.svg)](https://github.com/WaheedFox/Titan/actions/workflows/ci.yml)
 
 > 🇸🇦 [Arabic version ← README.md](README.md)

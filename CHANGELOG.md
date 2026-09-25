@@ -10,6 +10,9 @@ _No unreleased changes._
 
 ## [1.0.0b1] - 2026-08-11
 
+Titan B1 (`1.0.0b1`) is the first public baseline. Earlier alpha versions are
+historical pre-releases, not earlier public baselines.
+
 ### Packaging
 
 - The distribution package is named `titan-framework`.
@@ -58,7 +61,8 @@ Alpha patch release. No new features or architectural changes.
 
 ## [1.0.0a1] - 2026-07-01
 
-First public alpha release. The public API is stable and contract-frozen.
+First public alpha pre-release, preceding the Titan B1 public baseline. The
+public API is stable and contract-frozen.
 
 ### Public API
 

@@ -4,6 +4,8 @@
 
 بسيط. واضح. لا يتغير تحت قدميك.
 
+> **خط الأساس العام:** Titan B1 (`1.0.0b1`) هو أول خط أساس عام. إصدارات alpha السابقة (`1.0.0a1` و`1.0.0a2`) إصدارات تمهيدية تاريخية، وليست خطوط أساس عامة سابقة.
+
 [![CI](https://github.com/WaheedFox/Titan/actions/workflows/ci.yml/badge.svg)](https://github.com/WaheedFox/Titan/actions/workflows/ci.yml)
 
 > 🌐 [English version → README.en.md](README.en.md)

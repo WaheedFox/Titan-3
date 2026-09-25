@@ -393,14 +393,14 @@ class TestSignals:
 
 
 # ---------------------------------------------------------------------------
-# B2-007 — Lifecycle Gate Tests
+# Lifecycle ownership and shutdown tests
 # ---------------------------------------------------------------------------
 
-class TestB2007LifecycleGate:
+class TestLifecycleGate:
     """Deterministic lifecycle ownership and shutdown gates."""
 
     @pytest.mark.asyncio
-    async def test_b2007_direct_update_task_is_registered_through_polling_path(self):
+    async def test_direct_update_task_is_registered_through_polling_path(self):
         raw = _make_raw(701)
         handler_started = asyncio.Event()
         release_handler = asyncio.Event()
@@ -454,7 +454,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.handler_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_b2007_chat_worker_and_handler_share_registry_ownership(self):
+    async def test_chat_worker_and_handler_share_registry_ownership(self):
         from titan.bot import Titan
 
         bot = Titan("fake-token")
@@ -496,7 +496,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.chat_workers == {}
 
     @pytest.mark.asyncio
-    async def test_b2007_polling_accepted_chat_updates_are_not_dropped_on_shutdown(self):
+    async def test_polling_accepted_chat_updates_are_not_dropped_on_shutdown(self):
         from titan.bot import Titan
 
         bot = Titan("fake-token")
@@ -559,7 +559,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.chat_workers == {}
 
     @pytest.mark.asyncio
-    async def test_b2007_handler_finishing_during_grace_is_not_cancelled(self):
+    async def test_handler_finishing_during_grace_is_not_cancelled(self):
         raw = _make_raw(705)
         handler_started = asyncio.Event()
         grace_started = asyncio.Event()
@@ -619,7 +619,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.handler_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_b2007_handler_pending_after_grace_is_cancelled_and_cleaned(self):
+    async def test_handler_pending_after_grace_is_cancelled_and_cleaned(self):
         raw = _make_raw(706)
         handler_started = asyncio.Event()
         handler_cancelled = asyncio.Event()
@@ -672,7 +672,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.handler_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_b2007_handler_cancellation_is_not_reported_as_failure(self):
+    async def test_handler_cancellation_is_not_reported_as_failure(self):
         raw = _make_raw(707)
         handler_started = asyncio.Event()
         polling_blocked = asyncio.Event()
@@ -719,7 +719,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.handler_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_b2007_escaped_lifecycle_exception_is_observed_once(self):
+    async def test_escaped_lifecycle_exception_is_observed_once(self):
         raw = _make_raw(708)
         failure = RuntimeError("escaped lifecycle failure")
         accepted = asyncio.Event()
@@ -792,7 +792,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.handler_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_b2007_handled_update_exception_is_not_reported_by_observer_again(self):
+    async def test_handled_update_exception_is_not_reported_by_observer_again(self):
         from titan.bot import Titan
 
         bot = Titan("fake-token")
@@ -857,7 +857,7 @@ class TestB2007LifecycleGate:
             lifecycle_log.error.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_b2007_shutdown_waits_for_worker_and_handler_cleanup(self):
+    async def test_shutdown_waits_for_worker_and_handler_cleanup(self):
         from titan.bot import Titan
 
         bot = Titan("fake-token")
@@ -899,7 +899,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.chat_workers == {}
 
     @pytest.mark.asyncio
-    async def test_b2007_shutdown_final_invariant_has_no_owned_tasks_or_unobserved_exceptions(self):
+    async def test_shutdown_final_invariant_has_no_owned_tasks_or_unobserved_exceptions(self):
         from titan.bot import Titan
 
         bot = Titan("fake-token")
@@ -978,7 +978,7 @@ class TestB2007LifecycleGate:
         assert lifecycle.handler_tasks == set()
 
     @pytest.mark.asyncio
-    async def test_b2007_repeated_shutdown_is_safe_non_public_property(self):
+    async def test_repeated_shutdown_is_safe_non_public_property(self):
         from titan.bot import Titan
 
         bot = Titan("fake-token")
