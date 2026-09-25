@@ -1,6 +1,10 @@
 # تحقيق — Community Recipe Ecosystem
 
 **الحالة:** مفتوحة — في انتظار قرار معماري
+
+> **سياسة التوزيع الحالية:** تُثبّت Titan Core من GitHub. إشارات PyPI في هذا
+> التحقيق تخص حزم الوصفات المجتمعية المستقلة، لا حزمة Titan نفسها.
+
 **تاريخ:** 2026-07-27
 **الهدف:** تصميم نظام بيئي مجتمعي لـ Recipes حول Titan — ليس لشحن وصفات رسمية، بل لتعريف كيفية إنشاء وصفات خارجية ومشاركتها وتثبيتها وتوثيقها وصيانتها.
 
@@ -75,7 +79,9 @@ Homebrew يتيح "taps": مستودعات GitHub مستقلة تحتوي على
 
 **الفكرة التي تنطبق:** الحزمة تُعلن أنها تتطلب إصداراً محدداً من المضيف، لا أنها تُثبّته.
 
-**ما يعنيه لـ Titan:** الوصفة المجتمعية تُعلن `titan>=X.Y,<X+1` كـ dependency عادية في `pyproject.toml`. pip يحلّ التوافق. لا حاجة لآلية خاصة.
+**ما يعنيه لـ Titan:** تسجل الوصفة نطاق التوافق المقصود في metadata،
+وتستخدم مرجع GitHub لإصدار Titan Core الذي تستهدفه. لا يعتمد تثبيت Core
+على وجود حزمة Titan في فهرس حزم.
 
 ---
 
@@ -250,9 +256,11 @@ AntiFlood.setup(bot, limit=5)  # تسجيل تلقائي — محظور
 ```toml
 # pyproject.toml للوصفة
 [project]
-dependencies = ["titan>=1.0,<2.0"]
+dependencies = [
+    "titan-framework @ git+https://github.com/WaheedFox/Titan.git@v1.0.0b1"
+]
 ```
-pip يحل هذا تلقائياً عند التثبيت. لا حاجة لأداة خاصة.
+حدّث مرجع الوسم عند استهداف إصدار Titan مختلف؛ مصدر Core هو GitHub.
 
 **المستوى الثاني — metadata قابل للقراءة (اختياري، لكن موصى به):**
 ```toml
@@ -278,7 +286,7 @@ Titan يتبع semver. تغيير يكسر CONTRACT.md = رفع major version. �
 name = "titan-recipe-antiflood"
 version = "1.0.0"
 dependencies = [
-    "titan>=1.0,<2.0",
+    "titan-framework @ git+https://github.com/WaheedFox/Titan.git@v1.0.0b1",
     # لا اعتماديات ثقيلة إذا أمكن
 ]
 ```
@@ -311,7 +319,7 @@ name = "titan-recipe-<name>"           # اتفاقية التسمية إلزا�
 version = "X.Y.Z"                      # semver إلزامي
 description = "..."                    # جملة واحدة
 license = {text = "MIT"}               # أو أي رخصة مفتوحة
-dependencies = ["titan>=X.Y,<X+1.0"]  # إلزامي
+dependencies = ["titan-framework @ git+https://github.com/WaheedFox/Titan.git@v1.0.0b1"]  # حدّث الوسم
 
 [tool.titan-recipe]
 titan-compatibility = ">=X.Y,<X+1.0"  # مرآة للـ dependency — قابل للقراءة البشرية

@@ -701,8 +701,10 @@ ENTRIES: tuple[ArchiveEntry, ...] = (
             "Extensions pattern — AliasMap and AskManager as reference implementations. "
             "Introduced ecosystem/extensions/STANDARD.md as the community standard. "
             "Named bot.middleware() as today's integration point example, not a contract. "
-            "No Loader, Registry, or Discovery — naming convention titan-extension-<name> "
-            "on PyPI is the only infrastructure. No Core changes, no file moves."
+            "No Core Loader, Registry, or automatic Discovery. The naming convention "
+            "supports separately distributed community-extension discovery, including "
+            "PyPI search; Titan Core itself is distributed from GitHub. "
+            "No Core changes, no file moves."
         ),
         tags=("ecosystem", "extensions", "community", "architecture", "philosophy"),
         date="2026-07-28",

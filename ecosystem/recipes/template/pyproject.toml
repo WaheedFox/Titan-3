@@ -10,13 +10,15 @@ name = "titan-recipe-<name>"
 version = "0.1.0"
 description = "وصف مختصر لما تفعله الوصفة"
 requires-python = ">=3.10"
-dependencies = ["titan>=1.0,<2.0"]
+dependencies = [
+    "titan-framework @ git+https://github.com/WaheedFox/Titan.git@v1.0.0b1"
+]
 
 # اتفاقية التسمية الرسمية:
 #   اسم الحزمة  → titan-recipe-<name>
 #   اسم الاستيراد → titan_recipe_<name>
-# الالتزام بهذه الاتفاقية يجعل وصفتك قابلة للاكتشاف عبر:
-#   pip search titan-recipe   أو   PyPI: titan-recipe
+# هذا القالب لحزمة وصفة مستقلة، وليس لحزمة Titan Core.
+# Titan Core تُثبّت من GitHub؛ حدّث الوسم أعلاه إلى الإصدار الذي تستهدفه.
 
 # ─────────────────────────────────────────────────────────
 # [tool.titan-recipe] اختياري تماماً.

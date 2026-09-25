@@ -14,8 +14,10 @@
 
 ## التثبيت
 
+ثبّت Titan مباشرةً من مستودع GitHub الرسمي:
+
 ```bash
-pip install titan-framework
+pip install git+https://github.com/WaheedFox/Titan.git
 ```
 
 ---

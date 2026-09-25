@@ -67,7 +67,8 @@ answer = await manager.ask(ctx, "ما اسمك؟")
 - Registry مركزي = بنية تحتية تحتاج صيانة — رُفض في Recipes لنفس السبب
 - Discovery مدمج = يجعل Core تعلم بالامتدادات — ينتهك فصل المسؤوليات
 
-اتفاقية `titan-extension-<name>` على PyPI تكفي: بحث على PyPI يُعطي كل الامتدادات.
+اتفاقية `titan-extension-<name>` على PyPI تكفي لاكتشاف حزم الامتدادات
+المجتمعية. هذا لا يحدد قناة توزيع Titan Core، التي تبقى GitHub.
 
 ---
 

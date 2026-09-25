@@ -13,8 +13,10 @@ This guide gets a working Titan bot running from scratch.
 
 ## Installation
 
+Install Titan directly from the official GitHub repository:
+
 ```bash
-pip install titan-framework
+pip install git+https://github.com/WaheedFox/Titan.git
 ```
 
 ---

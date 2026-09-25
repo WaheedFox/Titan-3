@@ -14,8 +14,10 @@ Titan gives you clean events, readable code, and a stable API that does not chan
 
 ## Installation
 
+Install Titan directly from the official GitHub repository:
+
 ```bash
-pip install titan-framework
+pip install git+https://github.com/WaheedFox/Titan.git
 ```
 
 ---
