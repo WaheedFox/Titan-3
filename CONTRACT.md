@@ -454,22 +454,24 @@ is safe to close.
 
 # 9. Alias Layer — titan.extras only
 
-The alias feature is NOT part of core Titan. It is available exclusively through `TitanWithExtras` in `titan.extras`.
+The alias feature is NOT part of core Titan. It is provided by the standalone
+`AliasMap` utility in `titan.extras`.
 
 See §7 for the full extras contract.
 
 Summary:
-- `bot.alias(alias, target)` is a method of `TitanWithExtras`, not `Titan`
-- Vanilla `Titan` instances have no `alias()` method and carry no alias machinery
-- AliasMap validation, scope, and lifecycle rules apply only when using `TitanWithExtras`
+- `AliasMap` is an independent opt-in utility in `titan.extras`, not part of `Titan`
+- Aliases are enabled explicitly by registering `aliases.as_middleware()`
+- Vanilla `Titan` instances carry no alias machinery or alias state
+- AliasMap validation, scope, and lifecycle rules apply only when its middleware is registered
 
-### Alias Lifecycle and Scope (TitanWithExtras only)
+### Alias Lifecycle and Scope
 
 - Validation: target is validated against the Context class at registration time, not at runtime
-- Scope: aliases are applied per ctx instance — each incoming update receives a fresh ExtrasContext with all registered aliases applied
-- Applies to both methods and properties on ctx
-- Timing: aliases are applied after ctx is created and is_banned is set, before middleware runs
-- bot.alias() may be called before or after bot.run() — it takes effect on the next update processed after the call
+- Scope: aliases are applied per ctx instance when the AliasMap middleware runs
+- Aliases may target optional methods and properties on `ctx`
+- Timing: aliases are applied when execution reaches the registered middleware in the chain, and that middleware then calls `await next()`
+- Alias application is not a fixed phase before all middleware
 
 ---
 
@@ -523,7 +525,11 @@ For every incoming update, Titan guarantees this sequence:
 
 This order is guaranteed and externally observable. Any change to this sequence is a breaking change.
 
-Note: When using `TitanWithExtras` (see §7), step 3 is preceded by alias application to ctx. This is an extras-layer concern and is not part of the core sequence above.
+Note: When using `AliasMap` from `titan.extras` (see §7), alias application
+occurs inside the middleware chain when its registered middleware is reached.
+The AliasMap middleware applies aliases to `ctx` and then calls `await next()`;
+it is not a fixed phase before all middleware and is not part of the core
+sequence above.
 
 ### Stability Rule
 
@@ -661,7 +667,8 @@ No subclassing, no hooks, no lifecycle changes.
 
 ## AliasMap
 
-Provides method shortcuts on `ctx`. Wired via middleware using the same pattern as `AskManager`.
+Provides aliases for optional methods and properties on `ctx`. Wired via
+middleware using the same pattern as `AskManager`.
 
 ```python
 from titan.extras import AliasMap
@@ -674,7 +681,7 @@ bot.middleware(aliases.as_middleware())
 Rules:
 - `alias` must not conflict with an existing attribute of `Context` — otherwise `TitanError` at registration time
 - `target` must be an existing attribute of `Context` — otherwise `TitanError` at registration time
-- The original method name is never changed or removed
+- The original attribute is never changed or removed
 - Aliases are applied per-request; `ctx` instances outside this middleware are unaffected
 - Without `as_middleware()` registration, no alias is ever applied
 - Dynamic instance attributes set at runtime are not checked — developer responsibility
