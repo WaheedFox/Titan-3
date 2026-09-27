@@ -50,7 +50,6 @@
 
 | الفكرة | الإصدار المستهدف | الملاحظات |
 |---|---|---|
-| GitHub Actions / CI | v1.1 | تشغيل الاختبارات تلقائياً على كل PR |
 | Inline mode | v1.x | inline_query handler — يحتاج دراسة API |
 
 ---
@@ -87,6 +86,7 @@
 | **Titan Atlas (#9)** — طبقة المعرفة المعمارية لـ Titan (`titan.atlas`). تفهم قرارات المشروع، تعرض فلسفته، وتجعل المطورين والأدوات يفهمون لماذا أصبح Titan كما هو. ليست chatbot ولا LLM wrapper — deterministic knowledge layer فوق `titan.timeline`. أربع دوال عامة: `search()`, `explain()`, `rules()`, `decisions()`. غير مُصدَّرة من جذر الحزمة. | مكتملة — 2026-07-12 | [ADR-014](docs/decisions/014-architect-ai.md) | 831 اختباراً — كلها ناجحة |
 | **Performance Profiler (#7)** — `titan.profiler`: أداة تطوير تقيس wall time لكل update في بيئة محكومة. تبني فوق `feed_update()` + `titan.playground`. لا تعديلات في Core. `profile_update(bot, fake_command("start"), n=100)` → `ProfilingSession` مع `summary()`. | مكتملة | [ADR-013](docs/decisions/013-performance-profiler.md) | 36 اختباراً — كلها ناجحة |
 | **User Privacy & Erasure Protocol (#11)** — بروتوكول معماري شامل لدورة حياة User Data في Titan. ثلاثة أجناس من البيانات محدَّدة بوضوح (Transient / Permanent Resource Identity / User Data). `UserDataRegistry` المصدر الوحيد للحقيقة. `UserDataModule` Protocol بأربعة أعضاء إلزامية. `bot.enable_ask()` نقطة الربط الرسمية لـ AskManager. `/mydata` و`/forgetme` محجوزتان في كل بوت Titan. التقرير مُجمَّد عميقاً (MappingProxyType recursive). `bot.declare_user_data()` للـ modules الخارجية. الفصل بين First-party وThird-party مُطبَّق. | مكتملة — 2026-07-20 | [ADR-015](docs/decisions/015-data-lifecycle-responsibility.md) · [ADR-016](docs/decisions/016-user-data-registry.md) · [ADR-017](docs/decisions/017-reserved-privacy-commands.md) | 885 اختباراً — كلها ناجحة |
+| **GitHub Actions / CI** — workflow يعمل على كل push وPR، يشغّل الاختبارات على Python 3.10–3.12، ويبني wheel وsdist ويتحقق من وجود `py.typed` داخل wheel. | مكتملة | `.github/workflows/ci.yml` | pytest + packaging check |
 
 ---
 
