@@ -5,12 +5,53 @@
 """
 
 import pytest
+import sqlite3
 from titan.links.store import SqliteMessageStore
 
 
 @pytest.fixture
 def store():
     return SqliteMessageStore(":memory:")
+
+
+@pytest.mark.parametrize(
+    ("db_path", "expected_file"),
+    [
+        (":memory:", None),
+        ("links.db", "links.db"),
+        ("nested/links.db", "nested/links.db"),
+        (".titan/links.db", ".titan/links.db"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_sqlite_store_supports_database_paths(
+    tmp_path, monkeypatch, db_path, expected_file
+):
+    """كل مسارات قاعدة البيانات تنشئ الجدول وتحفظ البيانات فعلياً."""
+    monkeypatch.chdir(tmp_path)
+    store = SqliteMessageStore(db_path)
+
+    saved = await store.save_identity("Bot", 100, 1)
+    found = await store.get_by_titan_id(saved.titan_id)
+
+    assert found is not None
+    assert found.bot_username == "Bot"
+    assert found.chat_id == 100
+    assert found.telegram_message_id == 1
+
+    if expected_file is None:
+        assert list(tmp_path.iterdir()) == []
+    else:
+        database_path = tmp_path / expected_file
+        assert database_path.is_file()
+        with sqlite3.connect(database_path) as connection:
+            row = connection.execute(
+                """
+                SELECT bot_username, chat_id, telegram_message_id
+                FROM message_identity
+                """
+            ).fetchone()
+        assert row == ("Bot", 100, 1)
 
 
 class TestSaveIdentity:

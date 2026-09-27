@@ -121,9 +121,9 @@ class SqliteMessageStore(MessageStore):
                 # Double-checked locking — التحقق مجدداً داخل الـ lock
                 if self._conn is None:
                     if self._db_path != ":memory:":
-                        os.makedirs(
-                            os.path.dirname(self._db_path), exist_ok=True
-                        )
+                        db_dir = os.path.dirname(self._db_path)
+                        if db_dir:
+                            os.makedirs(db_dir, exist_ok=True)
                     conn = sqlite3.connect(
                         self._db_path,
                         check_same_thread=False,
