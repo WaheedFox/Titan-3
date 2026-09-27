@@ -338,8 +338,10 @@ The original method names remain available. Aliases are a naming layer only — 
 `AliasMap` is an independent object — share it across multiple routers:
 
 ```python
-router1.middleware(aliases.as_middleware())
-router2.middleware(aliases.as_middleware())
+# Register the middleware once on the bot, then include the routers
+bot.middleware(aliases.as_middleware())
+bot.include(router1)
+bot.include(router2)
 ```
 
 ---

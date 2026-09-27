@@ -332,8 +332,10 @@ async def handler(ctx):
 `AliasMap` كيان مستقل — يمكن مشاركته بين routers متعددة:
 
 ```python
-router1.middleware(aliases.as_middleware())
-router2.middleware(aliases.as_middleware())
+# سجّل middleware على البوت مرة واحدة، ثم أدرج الـ routers
+bot.middleware(aliases.as_middleware())
+bot.include(router1)
+bot.include(router2)
 ```
 
 ---

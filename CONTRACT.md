@@ -457,7 +457,7 @@ is safe to close.
 The alias feature is NOT part of core Titan. It is provided by the standalone
 `AliasMap` utility in `titan.extras`.
 
-See §7 for the full extras contract.
+See §16 for the full extras contract.
 
 Summary:
 - `AliasMap` is an independent opt-in utility in `titan.extras`, not part of `Titan`
@@ -525,7 +525,7 @@ For every incoming update, Titan guarantees this sequence:
 
 This order is guaranteed and externally observable. Any change to this sequence is a breaking change.
 
-Note: When using `AliasMap` from `titan.extras` (see §7), alias application
+Note: When using `AliasMap` from `titan.extras` (see §16), alias application
 occurs inside the middleware chain when its registered middleware is reached.
 The AliasMap middleware applies aliases to `ctx` and then calls `await next()`;
 it is not a fixed phase before all middleware and is not part of the core
@@ -645,7 +645,7 @@ bot.include(router)
 
 ---
 
-# 7. titan.extras — Opt-in DX Layer
+# 16. titan.extras — Opt-in DX Layer
 
 `titan.extras` provides optional developer-experience utilities that are NOT part of the core contract.
 Importing `titan` alone carries zero extras machinery — no state, no hooks, no interception.
