@@ -1,41 +1,67 @@
 # Investigation — Shared / Community Message Links Registry
 
-**الحالة:** تحقيق — لا قرار تنفيذ  
+**الحالة:** Revision تحقيق — لا قرار تنفيذ
 **التاريخ:** 2026-09-27  
 **المرتبط بـ:** Message Links Protocol (#0)، ADR-008، ADR-018  
 **نطاق هذا الملف:** دراسة معمارية فقط. لا يغيّر هذا التحقيق الكود أو العقود أو الاختبارات أو ADRs القائمة.
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary — Revision
 
-السؤال ليس: «كيف ننقل `links.db` إلى GitHub؟». السؤال الصحيح هو:
+السؤال المركزي في هذه النسخة ليس «هل نضيف مزامنة اختيارية؟»، بل:
 
-> هل يمكن أن يصبح سجل Message Links مشتركاً بين عدة bots وruntimes دون أن يتحول
-> Titan Core إلى عميل GitHub أو إلى نظام قاعدة بيانات موزعة؟
+> كيف يصبح تسجيل Message Links المشترك جزءاً إلزامياً وتلقائياً من semantics
+> لكل Titan runtime ملتزم بالعقد، من دون مطالبة المطوّر بالتصدير أو الرفع يدوياً،
+> ومن دون ربط Titan Core مباشرةً بـ GitHub أو تحويله إلى قاعدة بيانات موزعة؟
 
-النتيجة:
+### النتيجة المنقحة
 
-1. **Shared Message Links Registry قابل للتنفيذ معمارياً**، لكن ليس كامتداد
-   صامت لـ `ctx.send()` أو كبديل مباشر لـ SQLite.
-2. **GitHub مناسب كطبقة نشر وتوزيع ومراجعة وأرشفة مصدرية محدودة**، وليس مناسباً
-   عادةً كسجل application-facing متزامن يحتاج latency منخفضة، استعلامات كثيرة،
-   كتابة متزامنة، أو semantics تشبه قاعدة البيانات.
-3. **النموذج الأكثر توافقاً مع Titan هو Hybrid**: يبقى التسجيل المحلي durable
-   والمسار الحالي هو المصدر التشغيلي لمسار الإرسال و`/link`، بينما تكون المزامنة
-   إلى سجل مشترك قدرة اختيارية خارج Core.
-4. يجب أن يكون الفشل في السجل المشترك قابلاً للفصل عن نجاح Telegram. لا ينبغي
-   أن يجعل انقطاع GitHub رسالة Telegram فاشلة، ولا أن يخلق identity قبل نجاح
-   الإرسال.
-5. السجل العام المقترح لا ينبغي أن يخزن تلقائياً محتوى الرسائل أو كل metadata
-   المحلية. Identity وpublic URL وarchive وevidence وreports حدود مختلفة.
-6. `titan_id` الحالي متسلسل داخل store محلي؛ لا يكفي وحده كمفتاح عالمي بين
-   runtimes. أي سجل مشترك يحتاج namespace وprovenance موثوقين قبل أن يدعي
-   التحقق.
-7. لا يمكن اعتبار Git history دليلاً على أن رسالة Telegram حدثت فعلاً. هو
-   دليل على أن publisher أرسل commit، لا على صحة claim نفسه.
-8. أصغر boundary آمن هو capability اختيارية خارج Titan Core: publisher/reader
-   يستهلكان identities المحلية المؤكدة، ولا يعرف Core GitHub ولا يفرض وجوده.
+1. **المشاركة الاختيارية لا تحقق المتطلب.** إذا كان المطوّر يستطيع عدم التفعيل،
+   أو عدم الرفع، أو اختيار توقيت النشر، فليس ذلك Shared Message Links Registry
+   إلزامياً؛ بل capability إضافية.
+2. **الإلزامية المقصودة هي إلزامية التسجيل في مسار Titan، لا وعداً بأن الشبكة
+   ستستجيب فوراً.** كل `ctx.send()` و`ctx.reply()` ناجح يجب أن ينتج event محلياً
+   durable يدخل مسار النشر المشترك تلقائياً، من دون قرار من المطوّر.
+3. **التسجيل الإلزامي والنشر المقبول عن بُعد ليسا الشيء نفسه.** الحالة الصحيحة
+   بعد نجاح Telegram وانقطاع registry هي `pending` قابلة للاستئناف، لا إسقاط
+   الحدث ولا وصفه بأنه اختياري. أما event الذي لم يُحفظ محلياً فيكون `failed`
+   ويكسر invariant المطلوب، حتى لو تعذر التراجع عن رسالة Telegram التي أُرسلت.
+4. **النموذج الأقرب للمتطلب هو Mandatory Hybrid:** local durable record +
+   mandatory shared-publication pipeline. لا ينتظر `ctx.send()` commit GitHub
+   بالضرورة، لكنه لا يسمح بمسار compliant يرسل رسالة ثم يتجاهل shared record.
+5. **لا يستطيع Titan Core المحلي وحده فرض الصدق على runtime hostile.** يستطيع
+   فرض السلوك على runtime يستخدم نسخة Titan الرسمية كما هي، لكنه لا يستطيع منع
+   مالك الجهاز من تعديل الحزمة أو إزالة خطوة النشر أو استدعاء Telegram مباشرة.
+   لذلك كلمة mandatory ذات معنى عملي تحتاج boundary ثقة خارجية: relay أو
+   publisher موثوق، وهوية bot قابلة للتحقق، وسياسة قبول وتدقيق.
+6. **GitHub ليس authority أو enforcement mechanism بمفرده.** يمكنه أن يكون
+   publication/storage وaudit/distribution layer خلف publisher موثوق، لكنه لا
+   يثبت وحده أن Telegram أرسل الرسالة، ولا يجبر runtime مستقلاً على النشر.
+7. **المحتوى ليس mandatory تلقائياً لمجرد أن identity mandatory.** الحد الأدنى
+   الإلزامي هو identity projection وprovenance وlifecycle events. Archive أو
+   message content أو evidence أو reports طبقات ذات سياسات خصوصية واحتفاظ
+   مختلفة، وقد تحتاج موافقة أو مصدر ثقة مختلفاً.
+8. `titan_id` الحالي متسلسل داخل store محلي؛ لا يكفي وحده كمفتاح عالمي بين
+   runtimes. أي registry مشترك إلزامي يحتاج namespace وbot identity وevent
+   idempotency وprovenance قبل أن يدعي verification.
+9. **أصغر boundary قابل للدفاع عنه:** عقد Titan Core يضمن إنشاء event/outbox
+   محلي بعد نجاح Telegram، وpublisher/relay provider-agnostic يضمن محاولة
+   النشر وقابلية الاستئناف، بينما يبقى GitHub backend تفصيلاً خارج Core.
+   هذا ليس optional synchronization؛ الاختياري هو backend أو طريقة التوزيع،
+   لا أصل التسجيل في runtime compliant.
+
+### ثلاث عبارات يجب عدم خلطها
+
+| المفهوم | معناه | ما يمكن ضمانه |
+|---|---|---|
+| Optional sharing | المطوّر يقرر هل ينشر ومتى | لا يحقق المتطلب |
+| Automatic mandatory registration | كل مسار Titan مؤهل ينشئ event بلا قرار من المطوّر | قابل للفرض في compliant runtime |
+| Guaranteed publication | registry موثوق قبلت وحفظت event | يحتاج network/trusted service؛ لا يساوي registration |
+
+هذه النتائج مبنية على الحالة السابقة في `HEAD` عند:
+`7c43f11627a06c4341bc8aab45ba0fc3ce9b8369`، وعلى revision المنشورة لاحقاً
+بعدها. لا يعني هذا التقرير أن أي من هذه البنية قد نُفذت.
 
 هذه النتائج مبنية على الحالة الحالية في `HEAD` عند:
 `7c43f11627a06c4341bc8aab45ba0fc3ce9b8369`.
@@ -254,8 +280,10 @@ Local Registry
 ### Community/Public Registry
 
 السجل المجتمعي يخدم أدوات Titan الأوسع وقد يحتوي بيانات عامة، لكنه لا يجعل
-كل ما هو موجود محلياً صالحاً للنشر. يجب أن تكون public visibility قراراً
-صريحاً لكل نوع بيانات، لا أثراً جانبياً لتفعيل sync.
+كل ما هو موجود محلياً صالحاً للنشر. **إلزامية registration لا تعني إلزامية
+نشر كل byte من البيانات.** يجب أن يكون الحد الأدنى المنشور معروفاً في العقد،
+بينما تبقى public visibility لمحتوى الرسالة وarchive وreports قراراً مستقلاً.
+لا يجوز أن تتحول سياسة الخصوصية إلى opt-out يوقف identity نفسها.
 
 ### أقل record مفيد مبدئياً
 
@@ -273,6 +301,25 @@ Local Registry
 
 هذه ليست دعوة لإضافة الحقول الآن؛ بل قائمة بأسئلة لا يحلها نقل الصفوف الحالية
 كما هي. `chat_id` وarchive text وmetadata التشغيلية لا ينبغي افتراض نشرها.
+
+### Mandatory record مقابل mandatory content
+
+المتطلب الإلزامي الذي يمكن دراسته هنا هو أن كل event مؤهل لمسار Message Identity
+ينتج projection مشتركة دنيا، لا أن يصبح كل محتوى أرسله bot عاماً. الحد الأدنى
+المحتمل هو:
+
+- global bot/runtime identity أو namespace قابل للتحقق.
+- Titan identity reference.
+- Telegram reference بالقدر الذي يسمح بالربط دون كشف غير لازم.
+- event type وschema version.
+- publisher provenance ووقت القبول أو الملاحظة.
+- lifecycle state، بما فيها tombstone عند deletion.
+
+`text` وrich content و`chat_id` الكامل وmetadata الخاصة بالمحادثة وevidence
+الموسعة ليست نتيجة تلقائية من كلمة registration. إذا قرر عقد لاحق أن content
+جزء من shared record، فلابد أن يحدد مصدره (payload الذي مر عبر `ctx` أو fetch
+موثوق بعد الإرسال)، وحدود privacy والاحتفاظ والحذف والحجم. لا يحسم هذا التحقيق
+أن كل محتوى يجب أن يصبح public.
 
 ---
 
@@ -346,10 +393,39 @@ writer على ref/sha conflict handling الموثق، لا على افتراض 
 ويطلب التعامل مع limits بدلاً من تجاهلها. لا يعتمد هذا التحقيق على رقم ثابت
 لأن الحد يختلف بحسب نوع authentication والendpoint والسياسة الحالية.
 
-**inference:** API مناسبة لقراءات bounded أو مزامنة محدودة، لا لمسار `ctx.send()`
-الحساس للزمن ولا لـ `/link` الذي يجب أن يبقى سريعاً ومحلياً في العقد الحالي.
+**inference:** API مناسبة لقراءات bounded أو publication worker محدود، لا
+لمسار `ctx.send()` الحساس للزمن ولا لـ `/link` الذي يجب أن يبقى سريعاً ومحلياً
+في العقد الحالي. هذا لا يلغي mandatory publication؛ بل يعني أن الإلزامية يجب
+أن تُنفذ عبر durable acceptance محلي ثم delivery قابلة للاستئناف، لا عبر جعل
+كل send ينتظر HTTP request.
 
-### 5.4 Raw content
+### 5.4 Mandatory publication and the GitHub boundary
+
+إذا كان كل Titan bot ملتزماً بالعقد يجب أن يسجل تلقائياً، فهناك مستويان يجب
+فصلهما:
+
+1. **Runtime obligation:** بعد نجاح Telegram، ينشئ runtime eventاً محلياً
+   durable ويضعه في publication pipeline بلا opt-in أو developer action.
+2. **Remote acceptance:** publisher أو relay يرسل event إلى registry ويستلم
+   قبولاً قابلاً للتحقق. قد يحدث لاحقاً بسبب offline أو rate limit أو conflict.
+
+GitHub لا يوفر وحده المستوى الأول؛ فهو لا يرى code path داخل runtime ولا يجبر
+صاحب bot على استدعاء API. كما لا يوفر المستوى الثاني كـ application contract
+مناسب دون client/relay يعرّف idempotency وretry وconflict وschema. لذلك:
+
+- direct GitHub publishing يجعل token والاعتماد والـ API جزءاً من كل runtime.
+- authenticated relay يفصل Core عن GitHub ويضع policy والـ credentials في
+  جهة مركزية، لكنه يصبح boundary ثقة جديدة.
+- GitHub App أو installation token يحسن إدارة الصلاحيات، لكنه لا يمنع مالك
+  runtime من إزالة client أو تزوير event قبل إرساله.
+- GitHub Actions يمكنها التحقق والفهرسة بعد commit، لكنها لا تفرض أن كل
+  `ctx.send()` أنتج commit ولا تجعل workflow transaction مع Telegram.
+
+**النتيجة:** GitHub يمكن أن يكون storage/publication layer، لا authority
+تثبت أن event صدر من Titan runtime سليم. كلمة mandatory تحتاج عقداً في Titan
+وpublisher/relay يقبل events، وليس مجرد repository public.
+
+### 5.5 Raw content
 
 Raw content مفيد لتوزيع snapshot أو قراءة record منشور، لكنه ليس query service:
 
@@ -361,7 +437,7 @@ Raw content مفيد لتوزيع snapshot أو قراءة record منشور، �
 يمكن أن يكون raw commit-pinned content جزءاً من distribution layer، لا بديلاً
 عن registry semantics.
 
-### 5.5 Pull requests
+### 5.6 Pull requests
 
 Pull request workflow يضيف review وchecks وmoderation وaudit مفيدة لسجل
 مجتمعي، لكنه يجعل الكتابة:
@@ -374,7 +450,7 @@ Pull request workflow يضيف review وchecks وmoderation وaudit مفيدة �
 **inference:** PR-based submission مناسب لإدخال claims عامة أو تغييرات
 مجتمعية تحتاج مراجعة، وليس لتسجيل كل رسالة runtime على الخط الساخن.
 
-### 5.6 GitHub Actions
+### 5.7 GitHub Actions
 
 Actions يمكنها validate أو normalize أو publish أو build an index بعد push/PR.
 لكنها automation غير متزامنة، لا transaction مشتركة مع Telegram.
@@ -387,7 +463,7 @@ injection.
 **inference:** Actions مناسبة كطبقة تحقق/فهرسة/حماية حول registry، وليست
 مكاناً لجعل `ctx.send()` ينتظر commit أو نجاح workflow.
 
-### 5.7 Public مقابل private repository
+### 5.8 Public مقابل private repository
 
 **Public:**
 
@@ -422,9 +498,11 @@ runtimes.
 **Offline:** يعمل ما دام filesystem محلياً.  
 **Security/privacy:** البيانات لا تُرسل تلقائياً؛ الحماية filesystem.  
 **Scalability:** مناسبة لنطاق runtime واحد، لا community-wide queries.  
-**Titan compatibility:** الأعلى؛ هذا هو العقد الحالي.  
+**Titan compatibility:** الأعلى مع التنفيذ الحالي، لكنه لا يحقق shared registry
+ولا automatic community publication.
 **Migration:** لا migration مطلوبة.  
-**Limit:** لا shared verification أو community discovery.
+**Limit:** لا shared verification أو community discovery، ولا يستطيع المجتمع
+التحقق من record إذا بقي كل شيء محلياً.
 
 ### B — GitHub-backed Shared Registry
 
@@ -438,36 +516,49 @@ multiple writers.
 **Concurrency:** تحتاج serialization أو conflict retries؛ ملف واحد أو shard
 قد يصبح hot spot.  
 **Failure handling:** انقطاع API أو limit أو conflict يحدث بعد نجاح Telegram؛
-لا ينبغي أن يُعاد فشله إلى send.  
+لا ينبغي أن يُعاد فشله إلى send إذا كان event المحلي قد قُبل durable، لكنه
+يجب أن يبقى `pending` أو `failed` مرئياً ضمن mandatory contract، لا أن يتحول
+إلى omission اختياري.
 **Offline:** يحتاج queue محلية أو فقد sync؛ لا يمكن افتراض الكتابة أثناء
 offline.  
 **Security/privacy:** public history وtokens وworkflow خطر إضافي.  
 **Scalability:** repository/file/API limits وغياب query/index semantics تجعل
 الملايين records غير مناسبة كملفات خام.  
-**Titan compatibility:** مناسب فقط كـ optional external capability، وغير مناسب
-كـ required Core backend.  
+**Titan compatibility:** لا يحقق mandatory publication إذا كان direct client
+اختيارياً أو يستطيع المطوّر حذفه. ويمكنه أن يكون backend للنشر الإلزامي فقط
+خلف relay/contract موثوق، لا required GitHub backend داخل Core.
 **Migration:** backfill صعب لأن local stores قد تملك namespaces متصادمة
 والـ archive قد يكون حساساً.
 
-### C — Hybrid: Local Durable Store + Shared Registry
+### C — Mandatory Hybrid: Local Durable Store + Mandatory Shared Publication
 
-**Semantics:** local store يثبت identity ومسار `/link`; shared store يوزع
-claim أو snapshot أو index اختياري.  
-**Consistency:** local authoritative للتشغيل؛ shared eventually consistent.
-يجب عرض stale/unknown بدلاً من الإيحاء بأن غياب السجل يعني عدم وجود الرسالة.  
-**Durability:** يحتفظ local بالرسالة عند offline، ويحتاج sync recovery.  
-**Latency:** لا يضيف remote dependency إلى send أو local `/link`.  
-**Concurrency:** shared writer يعالج duplicate/conflict، بينما local لا يتأثر
-بـ remote outage.  
-**Failure handling:** Telegram success + local success + sync failure حالة
-مسموحة ومعلومة؛ retry يحتاج idempotency.  
-**Offline:** local outbox/queue مفاهيمياً مطلوبة إن كان sync مضموناً لاحقاً؛
-لا يُفترض وجود implementation في هذا التحقيق.  
-**Security/privacy:** يمكن نشر identity projection صغيرة وترك archive محلياً.  
-**Scalability:** أفضل من GitHub-only، لكن GitHub يبقى محدوداً كـ shared backend.  
-**Titan compatibility:** الأعلى بين النماذج التي تقدم sharing، إذا بقيت
-capability خارج Core.  
-**Migration:** additive من local، مع backfill ومطابقة namespace/provenance.
+**Semantics:** local store يثبت identity ومسار `/link`; كل identity event
+المؤهل يُسجل تلقائياً في durable outbox أو equivalent، ويُسلّم إلى shared
+publisher بلا opt-in. shared acceptance قد تكون asynchronous، لكنها ليست
+اختيارية في عقد runtime compliant.
+**Consistency:** local authoritative للتشغيل؛ shared eventually consistent
+مع state صريحة `accepted/pending/failed/stale`. غياب السجل لا يعني عدم وجود
+الرسالة، لكنه يعني أن invariant النشر لم يصل إلى `accepted` بعد.
+**Durability:** local record وoutbox يجب أن ينجوا من restart/offline. إذا
+فشل حفظهما، فهذه `failed` contract state وليست نجاحاً كاملاً.
+**Latency:** لا يضيف remote dependency إلى send أو local `/link` إذا كان
+القبول المحلي هو boundary المتزامن.
+**Concurrency:** publisher/relay يعالج duplicate/conflict، مع idempotency
+key وترتيب لا يتجاوز ما يستطيع registry ضمانه.
+**Failure handling:** Telegram success + local durable event + remote failure
+هي `pending`، ويجب أن تبقى قابلة للرصد والاستئناف. لا يعاد إرسال Telegram
+لمجرد فشل publication.
+**Offline:** لا يوقف offline الإرسال المحلي، لكنه يوقف `accepted` remote حتى
+يستأنف outbox. Eventual publication مضمونة فقط مع outbox durable وpublisher
+عامل وسياسة retry قابلة للحياة؛ وإلا لا يجوز ادعاء الضمان.
+**Security/privacy:** mandatory identity projection صغيرة، بينما archive و
+content وevidence وreports لها policies منفصلة.
+**Scalability:** أفضل من GitHub-only، لكن GitHub يبقى محدوداً كـ registry
+عالي الكتابة؛ relay أو service أخرى قد تكون لازمة.
+**Titan compatibility:** يحقق المتطلب إذا كان contract في Titan Core إلزامياً
+وكان publisher boundary موثوقاً، مع بقاء backend provider-agnostic.
+**Migration:** additive من local فقط إذا حُسم global identity وbackfill
+provenance؛ لا يجوز اعتبار كل local row verified تاريخياً.
 
 ### D — Shared Registry منفصل
 
@@ -481,21 +572,23 @@ capability خارج Core.
 **Security/privacy:** يمكن فصل public read عن authenticated publish وعن
 moderation.  
 **Scalability:** أفضل عند كثرة records وqueries، لكنها ليست مجانية أو بسيطة.  
-**Titan compatibility:** Core لا يحتاج معرفة المزود؛ capability خارجية.  
+**Titan compatibility:** Core لا يحتاج معرفة المزود، لكن registration event
+يصبح contract إلزامياً لا capability يختارها المطوّر. الخدمة أو relay خارجية
+تتعامل مع delivery والهوية والـ policy.
 **Migration:** تحتاج schema/versioning وخطة import من SQLite.  
 **Limit:** تضيف infrastructure كاملة قبل إثبات حجم الاستخدام والثقة المطلوبة.
 
 ### المقارنة المعمارية
 
-لا يوجد ranking واحد مستقل عن semantics:
+لا يوجد ranking واحد مستقل عن semantics، لكن mandatory requirement يستبعد
+الاختيارية كحل نهائي:
 
 - إذا كان المطلوب `/link` محلياً سريعاً: **A** كافية.
-- إذا كان المطلوب نشر snapshot مجتمعي ومراجعة بشرية: **B** قد تكفي بدور
-  publication/audit.
-- إذا كان المطلوب sharing دون تلويث lifecycle الحالي: **C** هي boundary
-  الأوضح.
-- إذا كان المطلوب خدمة استعلام وكتابة عالمية ذات SLA وconcurrency: **D** هي
-  الفئة الصحيحة، ولو كانت أكبر من حاجة Titan الحالية.
+- **B** لا تكفي وحدها؛ direct GitHub لا يفرض publication ولا يقدم trust.
+- إذا كان المطلوب shared publication إلزامية دون جعل Telegram ينتظر GitHub:
+  **C** هي semantics المطلوبة، مع publisher/relay.
+- إذا كان المطلوب خدمة استعلام وكتابة عالمية ذات SLA وconcurrency وenforcement:
+  **D** هي الفئة الصحيحة، ولو كانت أكبر من حاجة Titan الحالية.
 
 GitHub لا يصبح **D** لمجرد أن لديه API.
 
@@ -503,29 +596,52 @@ GitHub لا يصبح **D** لمجرد أن لديه API.
 
 ## 7. Runtime / Telegram Send Semantics
 
-### هل ينتظر `ctx.send()` الـ shared registry؟
+### ما الذي يعنيه mandatory؟
 
-لا، إذا بقي العقد الحالي مستقراً. `ctx.send()` يجب أن:
+المعنى المقترح ليس أن `ctx.send()` يجب أن ينتظر commit GitHub في كل مرة. المعنى
+هو أن نجاح مسار Titan المؤهل لا يخرج من lifecycle قبل أن ينشئ event محلياً
+durable يدخل publication pipeline تلقائياً. لذلك يجب أن:
 
-1. ينتظر Telegram.
-2. لا ينشئ identity قبل نجاح Telegram.
-3. يحفظ local identity بعد النجاح.
-4. يعيد نتيجة Telegram حتى لو فشل remote publication.
+1. ينتظر `ctx.send()` أو `ctx.reply()` نجاح Telegram أولاً.
+2. لا ينشئ identity أو shared claim قبل نجاح Telegram.
+3. يحفظ identity وmandatory publication event/outbox عند boundary محلي durable.
+4. يعيد نتيجة Telegram دون إعادة إرسالها بسبب network failure في registry.
+5. يترك event في `pending` حتى يقبله shared publisher، أو يعلن `failed` إذا
+   تعذر حتى حفظ الحد الأدنى المحلي أو انتهت سياسة الاسترداد.
 
-جعل GitHub synchronous يضيف network dependency وrate limits وcommit conflict
-إلى أبسط فعل في Titan، ويحوّل external outage إلى runtime behavior مخفي.
+هذا يفرق بين **mandatory obligation** و**synchronous remote availability**.
+جعل GitHub synchronous قد يحقق remote acceptance في بعض الحالات، لكنه يربط
+delivery بـ network/rate limits/conflicts. جعل التسجيل المحلي mandatory مع
+outbox يحافظ على delivery latency، بشرط ألا يُسمى event المنشور فعلاً إلا بعد
+قبول publisher.
+
+### المسارات المشمولة وغير المشمولة
+
+| المسار | المعنى المطلوب |
+|---|---|
+| `ctx.send()` الناجح | mandatory identity event + shared publication event |
+| `ctx.reply()` الناجح | نفس semantics؛ reply ليس استثناءً |
+| Telegram send الفاشل | لا identity ولا shared record |
+| `edit` | lifecycle event مرتبط بـ identity موجودة؛ لا ينشئ identity جديدة، ونشر المحتوى أو النسخة المعدلة يحتاج policy مستقلة |
+| `delete` / `mark_deleted()` | mandatory tombstone إذا كانت identity منشورة أو pending؛ لا يمحو التاريخ تلقائياً |
+| `bot.telegram` المباشر | خارج contract الحالي؛ لا يمكن نسبته إلى Titan تلقائياً دون gateway/adapter مستقبلي |
+| مسار send مخصص لا يمر عبر `ctx` | خارج ضمان العقد الحالي، ويجب أن يعلن ذلك بوضوح |
+
+إدخال direct `bot.telegram` في هذا الضمان من دون اعتراض مركزي سيخلق ادعاءً
+زائفاً بأن Titan يرى كل رسائل bot. boundary الصحيحة هي compliant Titan paths،
+لا كل استخدام ممكن لرمز Telegram.
 
 ### الحالات الأساسية
 
 | الحالة | النتيجة المعمارية المطلوبة |
 |---|---|
 | Telegram يفشل | لا identity محلية ولا shared identity |
-| Telegram ينجح، local يفشل | الرسالة ناجحة؛ identity قد تكون مفقودة، كما في best-effort الحالي؛ يلزم observability |
-| Telegram وlocal ينجحان، GitHub يفشل | الرسالة وlocal `/link` ناجحتان؛ shared state متأخرة أو pending |
-| Telegram وlocal وGitHub ينجحون | shared claim منشور، لكن لا يصبح truth موثقاً دون trust model |
+| Telegram ينجح، local identity أو outbox يفشل | الرسالة لا يمكن rollback لها؛ حالة `failed` تكشف أن mandatory invariant لم يتحقق، وتحتاج alert/recovery، لا إعادة إرسال أعمى |
+| Telegram وlocal/outbox ينجحان، GitHub يفشل | الرسالة وlocal `/link` ناجحتان؛ shared publication إلزامية لكن حالتها `pending`، ولا تُفقد ولا تُسمى accepted |
+| Telegram وlocal وGitHub ينجحون | shared claim `accepted/published`؛ لكنه لا يصبح truth موثقاً دون trust/provenance model |
 | retry بعد timeout | لا ينشئ duplicate؛ يحتاج key/idempotency أو deduplication |
-| restart أثناء sync | يستأنف pending work إن كان هناك durable outbox؛ وإلا يبقى sync غير مضمون |
-| offline period | يستمر local إن كان filesystem متاحاً؛ shared publication تتأخر |
+| restart أثناء sync | يستأنف pending work إذا كان هناك durable outbox؛ وإلا يصبح الالتزام mandatory غير قابل للضمان |
+| offline period | يستمر local إن كان filesystem متاحاً؛ shared event يبقى pending حتى يعود publisher |
 | stale shared read | يعاد `unknown/stale` semantics، لا `not found` القاطعة |
 
 ### Duplicate submission
@@ -546,12 +662,18 @@ GitHub لا يصبح **D** لمجرد أن لديه API.
 
 ### Synchronous أم asynchronous أم opportunistic؟
 
-- **Synchronous remote write:** غير متوافق مع بساطة وlatency Core.
-- **Asynchronous durable sync:** الأكثر اتزاناً إذا ثبتت حاجة sharing؛ يحتاج
-  queue/outbox وretry وdead-letter/observability كعقود مستقبلية.
-- **Opportunistic sync:** أبسط وأقل ضماناً؛ مناسب لنشر غير حرج فقط.
+- **Synchronous remote write:** يحقق أقوى remote acknowledgment، لكنه يجعل
+  network availability جزءاً من send أو يضطر إلى failure coupling. لا يلزم
+  اختياره لكي تكون registration mandatory.
+- **Asynchronous durable publication:** النموذج الذي يطابق المطلوب بأقل
+  تلويث لمسار الإرسال: local acceptance synchronous، وremote acceptance
+  eventual. يحتاج outbox/retry/dead-letter/observability كعقود مستقبلية.
+- **Opportunistic sync:** لا يحقق mandatory publication لأنه يسمح بضياع event
+  بعد restart أو تجاهل failure. يجوز كتحسين transport فقط بعد وجود durable
+  obligation، لا كنموذج registry.
 
-هذا تحقيق semantics، وليس قرار implementation أو إضافة queue.
+هذا تحقيق semantics، وليس قرار implementation أو إضافة queue. كلمة outbox هنا
+تصف invariant مطلوباً، ولا تعني أن هذا التحقيق ينفذ queue.
 
 ---
 
@@ -672,6 +794,71 @@ Token يملك write access يمكنه تعديل أو حذف أو نشر بيا
 
 السؤال الحاسم هو: من يملك حق كتابة claim، ومن يملك حق تغييره؟
 
+### طبقات الثقة المطلوبة
+
+```text
+Telegram / observed transport
+          ↑  (قد لا يراه registry)
+Compliant Titan runtime
+          ↓ mandatory local event
+Titan Core contract
+          ↓ provider-agnostic publication interface
+Publisher / authenticated relay
+          ↓ accepted, normalized, rate-limited event
+GitHub repository / registry storage
+          ↓
+Community readers, inspectors, reports
+```
+
+كل طبقة تثبت شيئاً مختلفاً:
+
+- **Bot runtime:** يملك execution context وTelegram credentials، ويمكنه إنشاء
+  event، لكنه يظل تحت سيطرة مطور bot.
+- **Titan Core:** يستطيع فرض أنه لا يوجد مسار compliant يرسل من `ctx` دون
+  تسجيل event، لكنه لا يستطيع فرض code integrity على جهاز المالك.
+- **Shared registry client:** ينسق event ولا يصبح موثوقاً لمجرد أنه package
+  محلي؛ يمكن حذفه أو تعديله إذا كان داخل runtime.
+- **Relay / service:** يمكنه إخفاء GitHub credentials، authentication،
+  rate limiting، schema validation، idempotency وaudit. لكنه يحتاج أن يقرر
+  هل يقبل self-attestation من runtime أم يحتاج evidence إضافياً.
+- **GitHub:** يثبت repository account/app والـ commit/history، لا أن Telegram
+  أرسل الرسالة ولا أن runtime شغّل Titan الرسمي.
+
+### هل direct write إلى GitHub يكفي؟
+
+لا. direct write يتطلب token أو GitHub App installation credentials في كل bot
+أو في بيئة مشتركة. هذا يخلق مشكلات:
+
+- token distribution وrotation وleast privilege على كل runtime.
+- إمكانية سرقة token أو استخدامه خارج message lifecycle.
+- إمكانية أن يزيل المطوّر call النشر أو يستبدل payload قبل GitHub.
+- account authentication تثبت صلاحية الكتابة إلى repository، لا ownership
+  للـ bot ولا حدوث Telegram send.
+- repository يتحول إلى hot path عالي الكلفة، مع rate limits وconflicts وabuse.
+
+GitHub App يحسن نموذج الصلاحيات ويجعل installation قابلاً للإلغاء، لكنه لا
+يحل enforcement داخل runtime. installation token يثبت أن app أو relay يكتب،
+لا أن كل `ctx.send()` مرّ فعلاً عبره.
+
+### هل relay موثوق يحل المسألة؟
+
+relay هو أصغر طبقة تجعل mandatory publication ذات معنى تشغيلياً:
+
+1. runtime compliant يرسل event تلقائياً بعد local acceptance.
+2. relay authenticates bot/runtime ويطبق schema وidempotency.
+3. relay يسجل `accepted/pending/rejected` ويحتفظ بسجل delivery.
+4. relay ينشر إلى GitHub أو backend آخر باستخدام credential واحد محمي.
+
+لكنه لا يحول self-report إلى حقيقة مستقلة. إذا كان runtime يستطيع أن يرسل
+`"Telegram succeeded"` كادعاء كاذب، فالrelay لا يعرف ذلك إلا إذا وجدت
+attestation أو observation إضافية. لذلك يجب أن يصف registry claim على أنه:
+
+- `runtime-observed` إذا وثق في compliant client.
+- `relay-accepted` إذا قبلته طبقة النشر.
+- `telegram-verified` فقط إذا وُجدت وسيلة تحقق مستقلة مناسبة.
+
+لا يجوز استخدام كلمة verified للطبقة الأولى أو الثانية تلقائياً.
+
 ### نماذج الكتابة
 
 - **أي Titan bot:** سهل، لكنه لا يمنع spoofing أو poisoning.
@@ -699,7 +886,14 @@ Token يملك write access يمكنه تعديل أو حذف أو نشر بيا
 6. distinction بين `verified`, `published`, `unverified`, `stale`, و`disputed`.
 
 لا يملك HEAD الحالي هذه الطبقات. لذلك لا ينبغي تسمية GitHub row “verified
-identity” بمجرد وجود commit.
+identity” بمجرد وجود commit. المطلوب قبل هذا الوصف هو على الأقل:
+
+1. تعريف compliant runtime وإصداره أو attestation المقبولة.
+2. هوية bot عالمية لا تعتمد على username القابل للتغيير وحده.
+3. credential أو registration يربط bot بـ publisher/relay.
+4. event idempotency يمنع replay والتعارض.
+5. سياسة تصحيح وtombstone لا تسمح للكاتب بمحو التاريخ بصمت.
+6. تمييز واضح بين self-attested وrelay-accepted وexternally verified.
 
 ---
 
@@ -720,9 +914,21 @@ GitHub repository/API/Actions
 
 ### Recovery
 
-Hybrid يحتاج، مفاهيمياً، معرفة pending events وإمكانية إعادة إرسالها. إذا
-لم توجد durable queue، فالـ opportunistic publisher لا يستطيع الوعد بـ
-eventual publication بعد restart.
+Mandatory Hybrid يحتاج، مفاهيمياً وcontractually، معرفة pending events
+وإمكانية إعادة إرسالها. إذا لم توجد durable queue أو equivalent durable
+outbox، فالـ runtime لا يستطيع الوعد بأن كل send أنتج shared registration بعد
+restart؛ عندها يكون التصميم ناقصاً، لا مجرد degraded optional sync.
+
+المطلوب التمييز بين الحالات التالية:
+
+- **accepted:** Telegram نجح، event المحلي قُبل، والـ relay/registry أعاد
+  acknowledgment قابلاً للتحقق.
+- **pending:** Telegram وlocal outbox نجحا، لكن remote acceptance لم يحدث أو
+  نتيجته غير معروفة. لا يُحذف event ولا يُعاد Telegram send.
+- **failed:** لم يُحفظ event المحلي، أو رُفض نهائياً بعد سياسة retry. هذه
+  مخالفة للـ mandatory invariant وتحتاج observability وrecovery، لا إخفاءها
+  كنجاح.
+- **stale/unknown:** حالة قراءة أو cache، لا حكم على وجود الرسالة أو عدمها.
 
 Retry لا ينبغي أن يكون blind:
 
@@ -740,15 +946,20 @@ Retry لا ينبغي أن يكون blind:
 - يجب أن تكون deletion state موثقة كـ observation لا ادعاء content deletion
   الكامل.
 
-### Partial sync
+### Partial publication
 
-قد يوجد identity محلياً ولا يوجد shared claim، أو يوجد shared claim لا يمكن
-قراءته بسبب outage أو permission. `/link` الحالي لا ينبغي أن يخلط بين:
+قد يوجد identity محلياً وoutbox event دون shared claim مقبول، أو يوجد shared
+claim لا يمكن قراءته بسبب outage أو permission. `/link` الحالي لا ينبغي أن
+يخلط بين:
 
 - غير موجود محلياً.
-- غير منشور shared.
+- منشور mandatory لكنه pending أو failed.
 - shared غير متاح.
 - shared stale.
+
+الفشل بعد Telegram ليس مبرراً لإعادة إرسال Telegram تلقائياً، لأن ذلك قد
+ينشئ رسالة مكررة. الاسترداد يخص event publication، مع idempotency key يربط
+المحاولات بنفس identity/event.
 
 ---
 
@@ -833,14 +1044,19 @@ Titan يعلن في الكود والوثائق:
 
 ### ما يتوافق
 
-Shared Registry capability اختيارية خارج Core تتوافق مع هذه المبادئ إذا:
+Mandatory publication contract مع provider-agnostic boundary يتوافق مع هذه
+المبادئ إذا:
 
-- لا تغير نجاح/فشل `ctx.send()` المحلي.
-- لا تجعل GitHub dependency مخفية.
-- لا تغير `/link` المحلي دون contract صريح.
-- لا تنشر archive أو chat metadata دون opt-in وسياسة واضحة.
-- تبقى `MessageStore` abstraction قابلة للفصل، لا import مباشر لـ GitHub
-  داخل Core.
+- يضمن event/outbox المحلي بعد نجاح `ctx.send()` و`ctx.reply()` بلا developer
+  action.
+- لا يجعل GitHub dependency مخفية؛ الـ Core يعرف عقد publication لا مزوداً
+  بعينه.
+- لا يغير `/link` المحلي إلى remote-first دون contract صريح.
+- ينشر identity projection mandatory صغيرة، ولا ينشر archive أو chat metadata
+  أو content بلا policy مستقلة.
+- تبقى `MessageStore` وpublication interface قابلة للفصل، لا import مباشر لـ
+  GitHub داخل Core.
+- يعرّف `pending` و`failed` كحالات تشغيلية مرئية، لا كفشل صامت أو optionality.
 
 ### ما لا يتوافق
 
@@ -863,15 +1079,19 @@ ctx.send()
 
 ```text
 Titan Core / local Message Links
-        ↑ confirmed local identities
-Optional Shared Registry capability
-        ├── publisher
-        ├── reader
-        └── provenance/policy
+        ├── confirmed local identity
+        └── mandatory durable publication event
+                    ↓ provider-agnostic interface
+Trusted publisher / relay
+        ├── authentication
+        ├── idempotency/retry
+        ├── provenance/policy
+        └── GitHub or another registry backend
 ```
 
-لا يعرف Core هل backend GitHub أو خدمة أخرى. ولا يُسمى backend المشترك
-“source of truth” قبل حسم trust وconsistency.
+لا يعرف Core هل backend GitHub أو خدمة أخرى، لكنه لا يسمح لمسار compliant
+بتحويل publication إلى قرار مطوّر. ولا يُسمى backend المشترك “source of
+truth” أو “verified authority” قبل حسم trust وconsistency.
 
 ---
 
@@ -879,7 +1099,8 @@ Optional Shared Registry capability
 
 ### ما يبقى ثابتاً
 
-إذا اختير Hybrid اختياري:
+ضمن Mandatory Hybrid المقترح، تبقى هذه الحدود المحلية ثابتة ما لم يصدر ADR
+جديد:
 
 - `bot.links` يبقى public API.
 - identity تُنشأ بعد نجاح `ctx.send()`/`ctx.reply()` فقط.
@@ -889,19 +1110,24 @@ Optional Shared Registry capability
 - SQLite local default.
 - `/forgetme` لا يمحو Permanent Resource Identity وفق العقد الحالي.
 
-### ما يصبح extension
+### ما يصبح mandatory contract أو external extension
 
-- shared read capability.
-- publisher أو relay خارجي.
-- sync status/observability.
-- public identity projection.
-- signed/provenance metadata.
+- automatic publication event بعد كل `ctx.send()` و`ctx.reply()` ناجح.
+- durable outbox أو equivalent يثبت أن event لم يُسقط عند restart/offline.
+- publisher أو relay خارجي يستقبل event بلا developer opt-in.
+- sync status/observability، بما فيه `accepted/pending/failed`.
+
+ويبقى backend المحدد، سواء GitHub أو خدمة أخرى، external extension؛ لا يعني
+ذلك أن publication نفسها اختيارية.
 
 ### ما يحتاج ADR جديدة أو تعديل قرار
 
 أي التزام بأن:
 
 - كل runtime ينشر تلقائياً.
+- كل `ctx.send()` و`ctx.reply()` الناجح ينتج shared registration event.
+- pending publication مقبولة مؤقتاً بعد network failure ولا تسقط obligation.
+- relay أو publisher موثوق مطلوب للـ authentication والـ delivery.
 - shared registry هو source of truth.
 - `/link` يقرأ remote.
 - GitHub مطلوب لتشغيل Titan.
@@ -913,9 +1139,12 @@ Optional Shared Registry capability
 
 ### Breaking أم additive؟
 
-- إضافة publisher اختياري خارج Core: **additive** إذا لم تغير السلوك الحالي.
+- إضافة publisher اختياري خارج Core: لا تكفي للمتطلب؛ تكون additive فقط إذا
+  كان عقد mandatory publication موجوداً خلفها.
 - إضافة remote read اختياري مع `unknown/stale` semantics واضحة: غالباً
   **additive**.
+- جعل التسجيل المشترك mandatory: **contract change** في lifecycle وfailure
+  semantics حتى لو بقي `/link` محلياً.
 - جعل GitHub إلزامياً أو جعل `/link` remote-first: **contract change** وقد
   يكون breaking في التشغيل والخصوصية.
 - جعل `/forgetme` يمحو public history: ليس مجرد implementation change؛ هو
@@ -1103,19 +1332,26 @@ Telegram. أي shared design يجب أن يحافظ على هذا الفصل أ�
 
 ### Inference
 
-- GitHub مناسب أكثر للنشر والمراجعة والتوزيع من hot-path registry.
-- Hybrid هو boundary الأقل تلويثاً لـ Core إذا ثبتت الحاجة.
+- GitHub مناسب أكثر للتخزين والنشر والمراجعة والتوزيع من hot-path registry،
+  ولا يحقق enforcement بمفرده.
+- Mandatory Hybrid هو boundary الأقل تلويثاً لـ Core إذا كان event/outbox
+  إلزامياً، حتى لو كان remote acceptance asynchronous.
+- trusted publisher/relay مطلوب إذا كان claim “mandatory” يراد له أن يعني
+  أكثر من self-report قابل للحذف.
 - identity projection يجب أن تنفصل عن archive/evidence/report.
 - verification يحتاج trust/provenance إضافيين.
 - global namespace مطلوب قبل shared lookup.
+- runtime hostile خارج قدرة enforcement لأي framework محلي.
 
 ### Open question
 
 - ما bot identity canonical عالمياً؟
-- من publisher المسموح له؟
+- من publisher/relay المسموح له، وما مستوى الثقة الذي يثبته؟
 - هل السجل public أم curated/private؟
 - ما freshness وavailability المطلوبان؟
+- ما الحد الأدنى الإلزامي من publication، وما الذي يبقى content/archive؟
 - هل المطلوب publication أم query service؟
+- هل `pending` بعد outage مقبولة إلى أجل محدد، وما معنى `failed`؟
 - ما retention/deletion policy؟
 - ما حجم الاستخدام الفعلي الذي يبرر service منفصلة؟
 
@@ -1123,73 +1359,181 @@ Telegram. أي shared design يجب أن يحافظ على هذا الفصل أ�
 
 ## 20. Conclusions
 
-### 1. هل Shared Message Links Registry قابل للتنفيذ؟
+### 1. Mandatory Shared Registry Model
 
-نعم، كطبقة اختيارية تفصل local runtime عن shared publication/read. لا، إذا
-كان المقصود استبدال local SQLite مباشرةً بجعل كل `ctx.send()` يكتب إلى شبكة.
+النموذج المطلوب ليس:
 
-### 2. هل GitHub مناسب؟
+```text
+Developer chooses whether to publish
+```
 
-مناسب لـ:
+بل:
 
-- curated public dataset صغير أو متوسط.
-- PR/review/moderation.
-- commits كـ provenance للتغييرات.
-- snapshots وdistribution وoffline clone.
-- Actions للتحقق أو بناء index محدود.
+```text
+ctx.send() / ctx.reply()
+        ↓
+Telegram succeeds
+        ↓
+Titan creates local identity + durable publication event
+        ↓
+Publisher / relay accepts and retries automatically
+        ↓
+Shared Registry records the mandatory projection
+```
 
-غير مناسب عادةً لـ:
+الـ invariant المقترح هو:
 
-- low-latency synchronous writes.
-- multi-writer database semantics.
-- ملايين records مع queries غنية.
-- privacy-sensitive archive.
-- إثبات صحة Telegram claims بمجرد commit.
+1. لا يوجد shared identity claim قبل نجاح Telegram.
+2. كل `ctx.send()` و`ctx.reply()` ناجح في compliant runtime ينتج event محلياً
+   بلا opt-in.
+3. event لا يضيع عند restart أو offline إذا كان local durable boundary قد
+   قُبل.
+4. `accepted` تعني أن shared publisher/registry أكد القبول؛ `pending` تعني أن
+   الالتزام قائم لكن network acceptance لم يحدث؛ `failed` تعني أن الالتزام
+   لم يستطع حتى حفظ event أو رُفض نهائياً.
+5. لا يعاد إرسال Telegram لمعالجة فشل publication.
 
-### 3. ما قيود الاستخدام الآمن؟
+بهذا تكون **registration mandatory** حتى عندما تكون **publication remote
+acceptance eventual**. أما ضمان قبول remote رغم outage كامل فيحتاج availability
+وdurability في relay والـ registry، ولا يمكن أن يضمنه Titan Core وحده.
 
-- لا تجعل GitHub dependency في Core.
-- لا تنشر chat IDs أو archive افتراضياً.
-- استخدم authenticated least-privilege publishers.
-- افصل public read عن write/moderation.
-- عالج SHA conflicts وrate limits وtimeouts.
-- اجعل duplicate/retry idempotent.
-- استخدم tombstones لا delete illusion.
-- لا تضع secrets في repository أو workflow logs.
-- عرّف stale/unknown semantics.
+`ctx.send()` و`ctx.reply()` داخلان في العقد. `edit` و`delete` و
+`mark_deleted()` lifecycle events مرتبطة بالidentity، لا identities جديدة.
+المسارات التي تستخدم `bot.telegram` مباشرة أو تتجاوز `ctx` خارج الضمان الحالي؛
+لا يجوز الادعاء بأن framework يرى تلك الرسائل تلقائياً.
 
-### 4. هل يتحمل GitHub semantics المطلوبة؟
+### 2. Trust Boundary
 
-يتحمل publication/audit/review semantics، ولا يتحمل وحده semantics قاعدة
-بيانات عالمية synchronous ذات query وconcurrency وSLA دون طبقات إضافية.
+الثقة لا تقع كلها في GitHub:
 
-### 5. هل نحتاج local persistence/cache/queue؟
+- Titan Core يفرض event creation على compliant runtime.
+- local durable store/outbox يثبت أن runtime قبل obligation.
+- publisher/relay authenticates، يتحقق من schema، يمنع replay، ويسجل الحالة.
+- GitHub يحفظ وينشر commits أو snapshots ويقدم audit/distribution.
+- verification الخارجي، إن لزم، يحتاج bot identity وattestation أو observation
+  مستقلة.
 
-local persistence مطلوبة للحفاظ على contract الحالي. queue/outbox مطلوبة
-مفاهيمياً إذا كان eventual sync مضموناً بعد restart/offline؛ أما opportunistic
-publication فلا تستطيع وعداً بذلك.
+Direct GitHub tokens داخل كل bot تجعل enforcement هشاً: يمكن تسريبها أو حذف
+خطوة النشر أو تزوير payload. GitHub App يحسن credential scope لكنه لا يفرض
+تشغيل Titan الرسمي. relay موثوق هو boundary الأصغر القابل للدفاع، مع الاعتراف
+أنه يضيف جهة ثقة مركزية وأن self-attestation لا تثبت Telegram بذاتها.
 
-### 6. ما الحدود بين Identity وArchive وEvidence وReports؟
+لا يستطيع framework محلي إجبار مطور hostile يملك الجهاز على تشغيل code لم يعد
+موجوداً عنده. الحد الواقعي هو:
 
-Identity تثبت reference claim، Archive يخزن content، Evidence يدعم provenance،
-وReport هو claim مجتمعي. لا ينبغي دمجها في public row واحد أو نشرها بنفس
-السياسة.
+- **compliant runtime:** لا developer action، ولا opt-out من registration.
+- **modified/hostile runtime:** يمكنه تجاوز Core أو تزوير claims؛ يحتاج النظام
+  إلى attestation أو جهة رصد خارجية إذا أراد مقاومة ذلك.
 
-### 7. ما أصغر boundary؟
+### 3. GitHub Role
 
-Optional Shared Registry capability خارج Core، تستهلك local identities
-المؤكدة وتنتج publication/read/provenance منفصلة. Core يبقى GitHub-agnostic.
+GitHub مناسب كـ:
 
-### 8. ما الذي يجب إثباته قبل ADR؟
+- storage/publication layer خلف publisher أو relay.
+- commit history للتدقيق في تغييرات registry.
+- distribution وraw/clone وsnapshots.
+- validation أو index محدود عبر Actions.
+- review وPR للـ policy أو التصحيحات المجتمعية غير الساخنة.
 
-- canonical global identity/namespace.
-- trust model وpublisher authorization.
-- public/private data boundary.
-- sync failure/idempotency/recovery semantics.
-- deletion/tombstone/retention semantics.
-- expected scale وquery patterns.
-- هل GitHub publication كافٍ أم نحتاج service registry.
-- evidence أن هناك حاجة تشغيلية تتجاوز local SQLite.
+GitHub ليس:
+
+- authority تثبت أن Telegram أرسل الرسالة.
+- enforcement mechanism يجبر كل runtime على النشر.
+- low-latency transaction database.
+- حلًا مستقلاً للـ idempotency والـ retry والـ ordering والـ provenance.
+- مكاناً مناسباً تلقائياً لـ archive أو content الحساس.
+
+إذن GitHub وحده لا يوفر trust/enforcement semantics المطلوبة. يمكنه حفظ
+publication التي قبلها relay، لكن يجب أن يبقى provider خلف boundary لا يعرفه
+Core.
+
+### 4. Failure Semantics
+
+الفشل لا يلغي mandatory obligation:
+
+| الحالة | الحالة المطلوبة |
+|---|---|
+| Telegram failed | لا identity ولا publication event |
+| Telegram succeeded + local acceptance failed | `failed` مرئية؛ لا rollback ولا Telegram retry أعمى |
+| local event accepted + GitHub/relay unavailable | `pending` durable مع retry |
+| timeout بعد request | تحقق من النتيجة قبل retry، باستخدام idempotency key |
+| accepted ثم deletion | tombstone lifecycle event؛ لا ادعاء بأن Git history اختفت |
+| restart/offline | استئناف من outbox؛ وإلا لا يجوز ادعاء eventual guarantee |
+| exhausted retry أو validation rejection | `failed` مع سبب قابل للرصد، لا إسقاط صامت |
+
+`ctx.send()` لا يحتاج أن ينتظر GitHub إذا كان local acceptance هو synchronous
+boundary. لكن نجاحه لا يعني أن shared record `accepted`؛ يجب أن تكون حالة
+publication قابلة للفحص، وإلا يتحول “mandatory” إلى شعار لا contract.
+
+### 5. Enforcement Limits
+
+يمكن فرض:
+
+- automatic registration في `ctx.send()` و`ctx.reply()` داخل نسخة Titan
+  compliant.
+- عدم إنشاء event قبل نجاح Telegram.
+- identity projection دنيا، idempotency key، وtombstone lifecycle.
+- local durability وvisibility للحالات `pending/failed`.
+
+لا يمكن فرضه من Core المحلي وحده:
+
+- أن runtime لم يُعدّل أو أن developer لم يحذف publisher.
+- أن claim عن Telegram صحيح أمام طرف ثالث.
+- أن GitHub متاح أو يقبل commit فوراً.
+- أن content المنشور لا يكشف معلومات حساسة إذا كانت policy خاطئة.
+- أن direct `bot.telegram` أو code paths خارج `ctx` مرّت عبر registry.
+
+لذلك “mandatory for all Titan runtimes” يجب أن تعني كل runtimes التي تلتزم
+بالعقد الرسمي. أما مقاومة runtime hostile فتحتاج trust anchor خارج الجهاز.
+
+### 6. Smallest Viable Architecture Boundary
+
+أصغر boundary يحقق الهدف دون GitHub coupling هو:
+
+```text
+Titan Core
+  ctx.send()/ctx.reply()
+  local identity
+  mandatory durable publication event
+  provider-agnostic publisher interface
+          ↓
+Trusted publisher / relay
+  authentication
+  schema/version
+  idempotency
+  retry/dead-letter
+  provenance and status
+          ↓
+Registry backend
+  GitHub or another storage/publication service
+```
+
+لا يطبق هذا التحقيق أي جزء من هذه البنية. كما أن `outbox` و`relay` هنا
+requirements وboundaries تحليلية، لا queue أو service منشأة في هذا التغيير.
+
+Mandatory Hybrid هو الاختيار الدلالي الأقرب: local durable storage +
+mandatory shared publication. أما اختيار GitHub كـ backend فهو قرار منفصل.
+إذا تطلبت المنظومة query/SLA/concurrency عالية، يصبح Shared Registry منفصل
+مع relay أو service هو الخيار التشغيلي الصحيح، ويمكن أن يبقى GitHub طبقة
+توزيع أو audit فقط.
+
+### 7. Open Questions Before ADR
+
+1. ما canonical global bot identity والـ namespace الذي يمنع collision؟
+2. ما الحد الأدنى الإلزامي من identity projection، وهل public دائماً؟
+3. ما authentication وattestation المقبولة للـ compliant runtime؟
+4. هل relay trust المركزية مقبولة، ومن يدير lifecycle والمفاتيح؟
+5. ما freshness/availability ومدة بقاء `pending` قبل اعتبارها `failed`؟
+6. كيف تُمثل idempotency وordering وduplicate claims وreplay؟
+7. هل `edit` و`delete` تنشر lifecycle/content events، وما retention والتombstone؟
+8. ما سياسة archive وmessage content وchat metadata والـ deletion العام؟
+9. هل GitHub يتحمل write rate وrepository growth وquery patterns المتوقعة؟
+10. ما الذي يثبت `telegram-verified` بدلاً من `runtime-observed`؟
+11. كيف تُربط reports وevidence دون تحويل registry إلى moderation engine؟
+12. ما contract الذي يغطي direct `bot.telegram` والمسارات خارج `ctx`؟
+
+لا ينبغي إنشاء ADR قبل الإجابة عن هذه الأسئلة، خصوصاً الفرق بين mandatory
+registration وguaranteed remote publication.
 
 ---
 
@@ -1205,47 +1549,50 @@ Optional Shared Registry capability خارج Core، تستهلك local identitie
 7. من يملك حق إضافة tombstone أو تصحيح claim؟
 8. ما retention policy للـ commits والـ reports والـ evidence؟
 9. ما الحجم المتوقع خلال سنة وثلاث سنوات؟
-10. هل توجد حاجة فعلية لكتابة online أثناء `ctx.send()`، أم تكفي export/sync؟
-11. هل GitHub هو distribution channel فقط، بينما registry الحقيقي خدمة أخرى؟
+10. هل local acceptance مع outbox كافية، أم توجد حاجة لremote synchronous
+    acknowledgment أثناء `ctx.send()`؟
+11. هل GitHub هو storage/publication channel فقط، بينما registry الحقيقي relay
+    أو service أخرى؟
 12. كيف يتوافق أي public deletion request مع Git history وforks؟
 
 ---
 
 ## 22. Recommended Next Investigation / Implementation Boundary
 
-الخطوة التالية ليست كتابة GitHub backend. التحقيق التالي يجب أن يحسم، باستخدام
-synthetic data فقط:
+الخطوة التالية ليست كتابة GitHub backend أو relay. التحقيق التالي يجب أن يحسم،
+باستخدام synthetic data فقط:
 
 1. canonical public record وglobal namespace.
 2. threat/trust model وpublisher lifecycle.
-3. projection المسموح نشرها من local identity.
-4. state machine لـ local success/shared pending/shared accepted/shared stale.
+3. projection الإلزامية المسموح نشرها من local identity.
+4. state machine لـ `accepted/pending/failed/stale`.
 5. idempotency وconflict behavior.
 6. deletion/tombstone/retention policy.
 7. workload حقيقي: write rate، read patterns، record growth، وoffline needs.
-8. قرار صريح بين:
-   - GitHub publication only،
-   - Hybrid مع shared read محدود،
-   - service registry منفصلة.
+8. قرار صريح بين GitHub كـ publication layer أو service registry منفصلة،
+   مع بقاء mandatory registration ثابتاً في الخيارين.
 
 الحد التنفيذي الذي يجب الحفاظ عليه إلى أن يثبت العكس:
 
 ```text
 Titan Core
   local Message Links contract
+  mandatory event after ctx.send()/ctx.reply()
   no GitHub import
   no remote wait in ctx.send()/ctx.reply()
 
-Optional infrastructure
-  consumes confirmed local identity
-  publishes a privacy-filtered projection
-  exposes explicit sync/provenance state
+Provider-agnostic mandatory publication boundary
+  durable local acceptance
+  publisher/relay with explicit status
+  publishes the mandatory privacy-filtered projection
   may use GitHub or another backend
 ```
 
 لا يوصي هذا التحقيق بإنشاء ADR أو backend أو queue الآن. القرار الصحيح حالياً
-هو إبقاء Message Links محلية ومستقرة، ومتابعة التحقيق في trust وnamespace
-والحاجة الفعلية قبل إضافة shared infrastructure.
+هو تثبيت الفرق الدلالي: المطلوب هو mandatory registration تلقائية، مع local
+durability وremote publication قابلة للاستئناف؛ وليس optional synchronization.
+كما يجب متابعة trust وnamespace وrelay وprivacy قبل اختيار GitHub أو إضافة
+shared infrastructure.
 
 ---
 
