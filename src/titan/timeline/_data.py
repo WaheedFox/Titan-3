@@ -710,4 +710,42 @@ ENTRIES: tuple[ArchiveEntry, ...] = (
         date="2026-07-28",
         path="docs/decisions/022-extension-system.md",
     ),
+    ArchiveEntry(
+        number="023",
+        title="Rich Message Content Boundary",
+        status="Accepted",
+        rule={
+            "en": (
+                "Content is typed at the boundary that owns its semantics, while "
+                "the transport schema remains at the boundary that owns the "
+                "transport. RichContent owns mode, outgoing direction, and Titan "
+                "validation; RichMessage owns incoming representation; Context "
+                "owns the request lifecycle; the request boundary owns "
+                "serialization to an owned transport-content snapshot; and the "
+                "adapter owns conversion to the Telegram API."
+            ),
+            "ar": (
+                "المحتوى يُمثَّل typed عند الحد الذي يملك semantics، ويُترك "
+                "transport schema عند الحد الذي يملكه transport. RichContent "
+                "يملك mode والاتجاه outgoing والتحقق الذي يخص Titan؛ "
+                "RichMessage يملك representation الواردة؛ Context يملك دورة "
+                "request الحالية؛ request boundary تملك serialization إلى "
+                "owned transport-content snapshot؛ وadapter يملك تحويل mode "
+                "إلى Telegram API."
+            ),
+        },
+        summary=(
+            "Defined RichContent as a small typed outgoing value with explicit "
+            "html, markdown, and blocks modes, while preserving the existing "
+            "Context send, reply, and edit verbs and the text= parameter. "
+            "RichContent carries mode-specific invariants without becoming a "
+            "Telegram schema mirror; RichMessage remains an incoming read model. "
+            "Serialization at the request boundary creates an owned snapshot "
+            "before network transport, keeping incoming, outgoing, editing, "
+            "identity, and archive responsibilities separate."
+        ),
+        tags=("rich-messages", "content-boundary", "api-design", "architecture"),
+        date="2026-09-05",
+        path="docs/decisions/023-rich-message-content-boundary.md",
+    ),
 )
