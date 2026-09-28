@@ -59,12 +59,9 @@
 | Automatic mandatory registration | كل مسار Titan مؤهل ينشئ event بلا قرار من المطوّر | قابل للفرض في compliant runtime |
 | Guaranteed publication | registry موثوق قبلت وحفظت event | يحتاج network/trusted service؛ لا يساوي registration |
 
-هذه النتائج مبنية على الحالة السابقة في `HEAD` عند:
-`7c43f11627a06c4341bc8aab45ba0fc3ce9b8369`، وعلى revision المنشورة لاحقاً
-بعدها. لا يعني هذا التقرير أن أي من هذه البنية قد نُفذت.
-
-هذه النتائج مبنية على الحالة الحالية في `HEAD` عند:
-`7c43f11627a06c4341bc8aab45ba0fc3ce9b8369`.
+هذه النتائج مبنية على source state عند:
+`7c43f11627a06c4341bc8aab45ba0fc3ce9b8369`، وعلى مراجعات Task 6 المنشورة
+بعده. لا يعني هذا التقرير أن أيّاً من هذه البنية قد نُفذت.
 
 ---
 
@@ -615,6 +612,55 @@ delivery بـ network/rate limits/conflicts. جعل التسجيل المحلي 
 outbox يحافظ على delivery latency، بشرط ألا يُسمى event المنشور فعلاً إلا بعد
 قبول publisher.
 
+### مستويات الضمان: من best effort إلى guaranteed delivery
+
+لا يكفي وصف النشر بأنه asynchronous. يجب تحديد ما الذي يبقى بعد كل فشل:
+
+| المصطلح | المعنى الدقيق | هل يحقق mandatory contract؟ |
+|---|---|---|
+| **best effort** | محاولة واحدة أو تسجيل غير durable؛ قد يضيع الحدث عند crash | لا |
+| **retryable** | فشل معروف مع event قابل لإعادة المحاولة | جزء من recovery، وليس ضماناً وحده |
+| **durable pending** | event محفوظ في boundary محلي durable مع state وidempotency key | نعم كالتزام محلي، قبل remote acceptance |
+| **acknowledged** | relay/registry أعاد قبولاً idempotent قابلاً للتحقق | نعم؛ هذه حالة `accepted` |
+| **eventual publication** | وعد بالوصول لاحقاً بشرط بقاء outbox سليماً وعودة publisher والـ registry | ضمان مشروط، لا فوري |
+| **guaranteed delivery** | لا فقدان حتى القبول البعيد، تحت assumptions محددة ومعلنة | لا يمكن إطلاقه بلا تحديد durability/availability والحدود |
+| **failed permanently** | validation أو policy أو فساد يمنع القبول بعد recovery policy | ليس نجاحاً؛ يجب أن يكون مرئياً وقابلاً للتدقيق |
+
+لذلك لا يجوز تسمية `pending` نجاحاً كاملاً، ولا تسمية best effort
+“eventual publication”. الحد الأدنى المنطقي للمتطلب هو: بعد نجاح Telegram، إما
+أن يوجد `durable pending` أو `accepted`، أو توجد `failed` صريحة تكشف أن
+invariant لم يتحقق. الصمت أو إسقاط event غير مقبولين كنموذج mandatory.
+
+### هل يجب أن تكون identity وpublication event في transaction واحدة؟
+
+**الاستنتاج المعماري:** نعم، يجب أن تشترك identity المحلية وmandatory
+publication event في نفس local durability boundary، ويفضل transaction واحدة
+في store يدعم atomic commit. السبب هو منع هذه النوافذ:
+
+```text
+identity committed → process crash → no publication event
+publication event committed → process crash → no identity reference
+```
+
+الـ remote write نفسه لا يمكن أن يكون جزءاً من transaction مع Telegram أو
+SQLite، لذلك يبقى خارج boundary كـ `pending` ثم `accepted`. أما identity و
+outbox/event ففصلهما يترك mandatory contract غير قابل للإثبات بعد crash.
+
+هذا لا يصف سلوكاً موجوداً في HEAD: الكود الحالي يحفظ identity محلياً ثم يعامل
+فشل التسجيل كـ best effort، ولا يملك outbox. لذلك يلزم contract/implementation
+قرار لاحق يحدد:
+
+- ما الحد الأدنى الذي يُحفظ في transaction.
+- هل storage failure يجعل caller يرى `failed` أو status قابلاً للرصد مع بقاء
+  Telegram success.
+- كيف تُستعاد identity موجودة بلا event، أو event بلا identity، دون اختراع
+  claim أو إعادة إرسال Telegram.
+
+لا يمكن rollback لرسالة Telegram بعد نجاحها، ولا يمكن تحقيق exactly-once بين
+Telegram وlocal database بمجرد transaction محلية. الممكن هو invariant أقوى
+داخل local boundary: كل send ناجح **يُقبل محلياً** مع identity وevent معاً،
+ثم تتم remote delivery بشكل idempotent.
+
 ### المسارات المشمولة وغير المشمولة
 
 | المسار | المعنى المطلوب |
@@ -630,6 +676,26 @@ outbox يحافظ على delivery latency، بشرط ألا يُسمى event ا�
 إدخال direct `bot.telegram` في هذا الضمان من دون اعتراض مركزي سيخلق ادعاءً
 زائفاً بأن Titan يرى كل رسائل bot. boundary الصحيحة هي compliant Titan paths،
 لا كل استخدام ممكن لرمز Telegram.
+
+### حدود `bot.telegram` ووضوح completeness
+
+العمليات الداخلة في Shared Message Links contract هي العمليات التي يعرّفها
+Titan كـ execution point للهوية: `ctx.send()` و`ctx.reply()` الناجحتان، ومعهما
+lifecycle operations المرتبطة بهوية أنشأها هذا المسار إذا حُسم ذلك في العقد.
+
+أما `bot.telegram.send_message()` والاستدعاءات المباشرة الأخرى فهي bypass
+مقصود للطبقة الحالية، ولا تنشئ Message Identity تلقائياً في HEAD. لا ينبغي
+إدخالها قسراً في هذه revision أو الادعاء أنها مشمولة. هذا متوافق مع الفصل
+الحالي بين `ctx` وraw Telegram API، لكنه يخلق خطراً حقيقياً من سوء فهم
+completeness:
+
+- Shared Registry يصف **Titan-managed message events**، لا كل نشاط bot على
+  Telegram.
+- report أو inspector لا يجوز أن يفسر غياب direct-API record كدليل أن الرسالة
+  لم تحدث.
+- يجب أن تقول الوثائق المستقبلية بوضوح إن mandatory coverage محدودة بـ
+  `ctx.send()`/`ctx.reply()`، ما لم يصدر contract مستقل يضيف gateway أو
+  instrumentation للمسارات الأخرى.
 
 ### الحالات الأساسية
 
@@ -683,6 +749,25 @@ outbox يحافظ على delivery latency، بشرط ألا يُسمى event ا�
 
 تثبت claim محدوداً: bot/runtime يقول إن message reference ارتبطت بـ Titan
 identity بعد send ناجح محلياً. لا تثبت وحدها أن claim صادق أمام طرف ثالث.
+
+### Minimum lifecycle semantics: identity, current state, evidence
+
+يجب ألا يتحول Mandatory Shared Registry تلقائياً إلى نظام versioning كامل:
+
+- **Message Identity:** event إنشاء ثابت يربط الرسالة بـ `titan_id` أو global
+  reference بعد نجاح `ctx`، ولا يُعاد استخدامه.
+- **Current Message State:** حالة حالية مثل `active` أو `deleted`. `edit` لا
+  ينشئ identity جديدة؛ ويمكن أن يحدّث current-state projection فقط إذا قرر
+  contract ذلك. `mark_deleted()` ينشر tombstone يحافظ على identity ولا يعني
+  محو كل historical data.
+- **Historical Evidence:** archive أو snapshot أو signature أو report يثبت
+  شيئاً إضافياً. لا يلزم إدخاله في canonical identity event، ولا يجوز أن
+  يُستنتج من وجود identity وحده.
+
+أقل semantics لازمة للهدف هي mandatory create event وtombstone lifecycle
+للـ identity المنشورة أو pending. أما edit/content history فهو policy منفصلة:
+قد يُسجل خارج canonical registry، أو يُمثل current state فقط، من دون فرض
+سجل versioning عام لكل تعديل.
 
 ### Metadata
 
@@ -859,6 +944,49 @@ attestation أو observation إضافية. لذلك يجب أن يصف registry 
 
 لا يجوز استخدام كلمة verified للطبقة الأولى أو الثانية تلقائياً.
 
+### Canonical record: authority مقابل transport
+
+قبل وصف record بأنه canonical يجب حسم أربع صلاحيات:
+
+1. **الكتابة:** هل يقبل relay events من كل registered bot، أم من publishers
+   authenticated فقط؟
+2. **التعديل:** هل record immutable بعد القبول، أم تُضاف corrections وtombstones
+   append-only؟
+3. **الربط:** كيف يرتبط event بـ bot/runtime وglobal identity دون الاعتماد على
+   username وحده؟
+4. **الإثبات:** ما الفرق بين self-attestation من runtime، وrelay acceptance،
+   وobservation مستقلة؟
+
+الاقتراح الدلالي الأكثر تحفظاً هو أن canonical state تكون نتيجة policy في
+publisher/registry: event مقبول، schema صحيح، idempotency محسومة، وlifecycle
+state أحدث منسوب إلى actor مسموح. عندها يمكن أن يكون GitHub:
+
+- **transport/public mirror** إذا كان relay هو السجل الذي يقرر القبول.
+- **durable publication store** إذا كان commit القابل للتحقق هو output
+  canonical لسياسة relay.
+- وليس authority مستقلاً إلا إذا عُرّفت صلاحيات repository وbranch والـ
+  append-only/tombstone policy كجزء من العقد، وحتى عندها يثبت GitHub
+  publication لا وقوع Telegram.
+
+Git history يثبت من نشر commit ومتى وفق timestamps الخاصة به، لكنه لا يثبت
+أن payload صادق أو أن event لم يُنشأ بعد تزوير. حذف الملف لا يمحو history أو
+forks؛ canonical deletion يجب أن تكون tombstone، بينما data erasure policy
+منفصلة.
+
+### سيناريو المطور الخبيث
+
+| الجهة | ما تستطيع فعله | ما يستطيع Titan منعه |
+|---|---|---|
+| **Compliant runtime** | إرسال رسالة عبر contract الرسمي فقط | يمنع opt-out البرمجي؛ ينشئ event تلقائياً وفق العقد |
+| **Modified Titan / fork** | حذف hook، تغيير payload، أو عدم الاتصال بالrelay | لا يستطيع Core المحلي منعه؛ يمكن كشف الإصدار أو طلب attestation فقط |
+| **Direct Telegram API** | إرسال رسائل خارج `ctx` بلا identity حالية | لا يشمله contract الحالي؛ يجب عدم تفسير غيابه كعدم حدوثه |
+| **Malicious client** | إرسال claims مزيفة أو replay أو namespace collision | relay authentication/schema/idempotency/rate limits تقلل poisoning، لكنها لا تثبت أن Telegram حدث |
+| **Bot لا يستخدم Titan** | لا يملك Titan identity أصلاً | خارج نطاق enforcement والـ registry |
+
+الغرض من mandatory contract هو إزالة اعتماد التسجيل على حسن نية المطور في
+runtime compliant، لا الادعاء بأن framework المحلي يستطيع إجبار برنامج معدّل
+عمداً أو bot خارج Titan.
+
 ### نماذج الكتابة
 
 - **أي Titan bot:** سهل، لكنه لا يمنع spoofing أو poisoning.
@@ -936,6 +1064,26 @@ Retry لا ينبغي أن يكون blind:
 - تحقق من أن event لم يُقبل سابقاً.
 - لا تعيد non-idempotent mutation بعد timeout دون التحقق من النتيجة.
 - افصل API failure عن validation rejection وعن permission failure.
+
+### Failure matrix
+
+| failure | ما يبقى محلياً | semantics المطلوبة |
+|---|---|---|
+| process crash قبل local commit | لا يوجد event قابل للضمان | لا يُسمى send مسجلاً؛ يلزم recovery/observability |
+| crash بعد atomic identity+outbox commit | identity وevent | `durable pending`، يستأنف بعد restart |
+| network/GitHub outage | outbox وattempt metadata | لا فقد؛ retry عند عودة الخدمة، ولا Telegram retry |
+| rate limit | event وموعد retry | `retryable/pending` مع احترام backoff، لا flood |
+| duplicate delivery | event نفسه وidempotency key | relay يعيد نفس acceptance أو يرفض duplicate بلا row جديد |
+| partial local persistence | identity بلا outbox أو العكس | inconsistency صريحة؛ reconcile/quarantine، لا اختراع shared claim |
+| corrupted queue/state | bytes غير قابلة للتحقق | `failed` أو quarantine مع alert؛ لا حذف صامت ولا retry أعمى |
+| repeated retry | سجل محاولات bounded | idempotent deduplication وdead-letter بعد policy معلنة |
+| permanent validation/auth failure | event محفوظ وسبب الرفض | `failed permanently` قابل للتدقيق، مع مسار تصحيح لا يفقد الأصل |
+
+الضمان الواقعي هو **at-least-once local obligation مع remote idempotency**،
+وليس exactly-once end-to-end. Eventual publication يمكن ادعاؤها فقط تحت شروط
+معلنة: local durable state سليم، publisher يستمر، registry يعود أو يملك
+مساراً بديلاً، والحدث لا يُرفض نهائياً. إذا لم تتحقق هذه الشروط فالحالة
+المنضبطة هي `failed` أو `unknown`، لا وعد delivery مطلق.
 
 ### Deletion
 
@@ -1113,6 +1261,8 @@ truth” أو “verified authority” قبل حسم trust وconsistency.
 ### ما يصبح mandatory contract أو external extension
 
 - automatic publication event بعد كل `ctx.send()` و`ctx.reply()` ناجح.
+- atomic local persistence boundary تجمع identity وpublication event، أو
+  recovery contract يثبت بديلاً مكافئاً.
 - durable outbox أو equivalent يثبت أن event لم يُسقط عند restart/offline.
 - publisher أو relay خارجي يستقبل event بلا developer opt-in.
 - sync status/observability، بما فيه `accepted/pending/failed`.
@@ -1145,6 +1295,8 @@ truth” أو “verified authority” قبل حسم trust وconsistency.
   **additive**.
 - جعل التسجيل المشترك mandatory: **contract change** في lifecycle وfailure
   semantics حتى لو بقي `/link` محلياً.
+- اشتراط atomic identity+event persistence: **contract change** في local
+  durability، ولا يوفره HEAD الحالي.
 - جعل GitHub إلزامياً أو جعل `/link` remote-first: **contract change** وقد
   يكون breaking في التشغيل والخصوصية.
 - جعل `/forgetme` يمحو public history: ليس مجرد implementation change؛ هو
@@ -1187,14 +1339,21 @@ truth” أو “verified authority” قبل حسم trust وconsistency.
 - non-writable filesystem.
 - remote absence مقابل remote outage.
 - global namespace collision بين runtimes.
+- crash windows بين identity وpublication event.
+- corrupted أو partially written local outbox.
+- direct `bot.telegram` مقابل `ctx` coverage.
 
 ### اختبارات مطلوبة فقط إذا اعتمدت architecture جديدة
 
 - contract tests تفصل local identity عن remote publication.
+- atomic commit/recovery tests تثبت عدم وجود identity بلا event أو event بلا
+  identity بعد process crash.
 - idempotency عند retry وtimeout.
 - concurrency/conflict tests لملف أو shard مشترك.
 - read-after-write وeventual consistency semantics.
 - offline queue/restart/recovery.
+- rate-limit/backoff وpermanent rejection semantics.
+- repeated retry وdead-letter/quarantine للـ corrupted state.
 - duplicate publisher claims.
 - permission/authentication failure.
 - token scope and secret exposure.
@@ -1281,8 +1440,10 @@ publishers، وpoisoning reports. هذه قدرة تشغيلية خارج Titan 
 
 حتى local identity ليست guaranteed بلا شروط: `_register_identity()` يتخطى
 العملية عند غياب username أو message ID، ويفصل storage failure عن نجاح
-Telegram. أي shared design يجب أن يحافظ على هذا الفصل أو يعلن contract جديداً
-بوضوح.
+Telegram. كما لا يوجد في HEAD publication event أو atomic identity+event
+boundary. أي shared design يجب أن يحافظ على الفصل بين Telegram وremote
+availability، ويعلن contract جديداً بوضوح حول local failure وrecovery بدلاً من
+تغطيتها بكلمة asynchronous.
 
 ---
 
@@ -1342,6 +1503,12 @@ Telegram. أي shared design يجب أن يحافظ على هذا الفصل أ�
 - verification يحتاج trust/provenance إضافيين.
 - global namespace مطلوب قبل shared lookup.
 - runtime hostile خارج قدرة enforcement لأي framework محلي.
+- mandatory event creation وremote acceptance وguaranteed delivery ثلاث
+  guarantees مختلفة.
+- identity وpublication event يجب أن يشتركا في local atomic durability boundary
+  أو يملكا recovery contract مكافئاً.
+- remote guarantee الواقعي at-least-once مع idempotent acceptance، لا exactly-once
+  بين Telegram وregistry.
 
 ### Open question
 
@@ -1352,6 +1519,11 @@ Telegram. أي shared design يجب أن يحافظ على هذا الفصل أ�
 - ما الحد الأدنى الإلزامي من publication، وما الذي يبقى content/archive؟
 - هل المطلوب publication أم query service؟
 - هل `pending` بعد outage مقبولة إلى أجل محدد، وما معنى `failed`؟
+- ما policy إصلاح corruption أو partial local state؟
+- ما الحد الأدنى من attestation الذي يميز runtime-observed عن telegram-verified؟
+- هل canonical registry هو relay أم GitHub mirror أم خدمة مستقلة؟
+- هل يجب أن يرفض contract نجاحاً محلياً إذا فشل حفظ identity+event، مع أن Telegram
+  لا يمكن rollback له؟
 - ما retention/deletion policy؟
 - ما حجم الاستخدام الفعلي الذي يبرر service منفصلة؟
 
@@ -1392,10 +1564,17 @@ Shared Registry records the mandatory projection
    الالتزام قائم لكن network acceptance لم يحدث؛ `failed` تعني أن الالتزام
    لم يستطع حتى حفظ event أو رُفض نهائياً.
 5. لا يعاد إرسال Telegram لمعالجة فشل publication.
+6. identity وpublication event يُقبلان معاً داخل local atomic boundary؛ remote
+   acceptance يبقى خارجها.
 
 بهذا تكون **registration mandatory** حتى عندما تكون **publication remote
 acceptance eventual**. أما ضمان قبول remote رغم outage كامل فيحتاج availability
 وdurability في relay والـ registry، ولا يمكن أن يضمنه Titan Core وحده.
+
+اسم **Mandatory Hybrid** ليس architecture مكتملة ولا implementation قراراً؛ هو
+وصف للـ semantics: mandatory local event + shared publication خارج critical
+path. يمكن تنفيذ هذا الوصف لاحقاً عبر relay أو service registry، وقد يستخدم
+GitHub أو لا يستخدمه.
 
 `ctx.send()` و`ctx.reply()` داخلان في العقد. `edit` و`delete` و
 `mark_deleted()` lifecycle events مرتبطة بالidentity، لا identities جديدة.
@@ -1464,6 +1643,9 @@ Core.
 `ctx.send()` لا يحتاج أن ينتظر GitHub إذا كان local acceptance هو synchronous
 boundary. لكن نجاحه لا يعني أن shared record `accepted`؛ يجب أن تكون حالة
 publication قابلة للفحص، وإلا يتحول “mandatory” إلى شعار لا contract.
+كما أن local acceptance نفسه ليس مضموناً في HEAD الحالي: إذا فصل التنفيذ
+identity insert عن event persistence، يبقى crash window يخرق invariant. لذلك
+الـ atomic boundary مطلب سابق على ادعاء eventual publication.
 
 ### 5. Enforcement Limits
 
@@ -1510,6 +1692,11 @@ Registry backend
 
 لا يطبق هذا التحقيق أي جزء من هذه البنية. كما أن `outbox` و`relay` هنا
 requirements وboundaries تحليلية، لا queue أو service منشأة في هذا التغيير.
+
+الحد الأدنى ليس “Core يرسل إلى GitHub”، بل “Core لا يسمح بفقد event بعد local
+acceptance، وpublisher موثوق يعالج delivery”. أما authority فتظل قراراً
+منفصلاً: GitHub قد يكون mirror أو durable publication store، بينما canonical
+acceptance قد تقع في relay أو registry service.
 
 Mandatory Hybrid هو الاختيار الدلالي الأقرب: local durable storage +
 mandatory shared publication. أما اختيار GitHub كـ backend فهو قرار منفصل.
