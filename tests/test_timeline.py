@@ -213,6 +213,25 @@ class TestDataConsistency:
         for e in ENTRIES:
             assert (root / e.path).exists(), f"Missing file: {e.path}"
 
+    def test_all_official_adrs_are_in_timeline(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        official = sorted(
+            path.relative_to(root).as_posix()
+            for path in (root / "docs" / "decisions").glob("[0-9][0-9][0-9]-*.md")
+        )
+        expected = [
+            (path.rsplit("/", 1)[-1].split("-", 1)[0], path)
+            for path in official
+        ]
+        actual = [(entry.number, entry.path) for entry in ENTRIES]
+
+        assert actual == expected
+        assert [number for number, _ in actual] == sorted(
+            number for number, _ in actual
+        )
+
     def test_all_tags_are_non_empty_tuples(self):
         assert all(isinstance(e.tags, tuple) and len(e.tags) > 0 for e in ENTRIES)
 
